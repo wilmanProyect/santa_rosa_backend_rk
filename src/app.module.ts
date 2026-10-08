@@ -3,31 +3,35 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AreasModule } from './modules/areas/areas.module';
 import { RolesPermissionsModule } from './modules/roles-permissions/roles-permissions.module';
 import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
   imports: [
+    AreasModule,
     RolesPermissionsModule,
     UsersModule,
+    AuthModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // Configuración asíncrona de TypeORM para PostgreSQL
+    // PostgreSQL. El esquema se gestiona con migraciones (src/database/migrations),
+    // que se aplican al arrancar salvo que DB_MIGRATIONS_RUN=false.
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 5432),
-        username: configService.get<string>('DB_USER', 'postgres'),
-        password: configService.get<string>('DB_PASSWORD', 'postgres'),
-        database: configService.get<string>('DB_NAME', 'santa_rosa_db'),
+        ...buildDataSourceOptions((key) => configService.get<string>(key)),
+        // Las entidades las registra cada módulo con forFeature.
+        entities: [],
         autoLoadEntities: true,
-        synchronize: configService.get<string>('NODE_ENV') !== 'production', // true solo en desarrollo
+        migrationsRun:
+          configService.get<string>('DB_MIGRATIONS_RUN', 'true') !== 'false',
       }),
     }),
   ],

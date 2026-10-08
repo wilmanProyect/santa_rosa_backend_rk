@@ -1,15 +1,17 @@
-import { Inject, Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { GetAreaUseCase } from '@modules/areas/application/use-cases/get-area.use-case';
+import { RoleLookupService } from '@modules/roles-permissions/application/services/role-lookup.service';
 import { USER_REPOSITORY } from '../../domain/repositories/user.repository.interface';
 import type { IUserRepository } from '../../domain/repositories/user.repository.interface';
 import { PASSWORD_HASHER } from '../../domain/ports/password-hasher.interface';
 import type { IPasswordHasher } from '../../domain/ports/password-hasher.interface';
-import { ROLE_REPOSITORY } from '@modules/roles-permissions/domain/repositories/role.repository.interface';
-import type { IRoleRepository } from '@modules/roles-permissions/domain/repositories/role.repository.interface';
 import { User } from '../../domain/models/user.model';
 import { Email } from '../../domain/value-objects/email.vo';
 import { Password } from '../../domain/value-objects/password.vo';
+import { Username } from '../../domain/value-objects/username.vo';
+import { assertPasswordPolicy } from '../../domain/services/password-policy';
 import { CreateUserDto } from '../dtos/create-user.dto';
-import { UUID } from '@shared/domain/value-objects/uuid.vo';
+import { UserUniquenessService } from '../services/user-uniqueness.service';
 
 @Injectable()
 export class CreateUserUseCase {
@@ -18,41 +20,48 @@ export class CreateUserUseCase {
     private readonly userRepository: IUserRepository,
     @Inject(PASSWORD_HASHER)
     private readonly passwordHasher: IPasswordHasher,
-    @Inject(ROLE_REPOSITORY)
-    private readonly roleRepository: IRoleRepository,
+    private readonly roleLookup: RoleLookupService,
+    private readonly getAreaUseCase: GetAreaUseCase,
+    private readonly uniqueness: UserUniquenessService,
   ) {}
 
-  async execute(dto: CreateUserDto): Promise<User> {
-    const emailVo = new Email(dto.email);
+  async execute(actorId: string, dto: CreateUserDto): Promise<User> {
+    const username = new Username(dto.username);
+    const email = new Email(dto.email);
+    const ciNumber = dto.ciNumber.trim().toUpperCase();
+    assertPasswordPolicy(dto.password);
 
-    const existingUser = await this.userRepository.findByEmail(emailVo.getValue());
-    if (existingUser) {
-      throw new ConflictException(`User with email "${dto.email}" already exists`);
-    }
+    await this.uniqueness.assertAvailable({
+      username: username.getValue(),
+      email: email.getValue(),
+      ciNumber,
+    });
 
-    const passwordHash = await this.passwordHasher.hash(dto.password);
-    const passwordVo = new Password(passwordHash);
-
-    let roles = [];
-    if (dto.roleIds && dto.roleIds.length > 0) {
-      for (const roleId of dto.roleIds) {
-        const role = await this.roleRepository.findById(roleId);
-        if (!role) {
-          throw new NotFoundException(`Role with ID "${roleId}" not found`);
-        }
-        roles.push(role);
-      }
-    }
-
-    const userId = new UUID().getValue();
-    const user = new User(
-      userId,
-      dto.name,
-      emailVo,
-      passwordVo,
-      true,
-      roles,
+    const area = dto.areaId
+      ? await this.getAreaUseCase.executeActive(dto.areaId)
+      : null;
+    const roles = await this.roleLookup.resolveAssignableRoles(
+      dto.roleIds ?? [],
     );
+    const password = new Password(await this.passwordHasher.hash(dto.password));
+
+    const user = User.create({
+      firstName: dto.firstName,
+      paternalLastName: dto.paternalLastName,
+      maternalLastName: dto.maternalLastName ?? null,
+      ciNumber,
+      email,
+      birthDate: dto.birthDate,
+      phone: dto.phone ?? null,
+      position: dto.position ?? null,
+      username,
+      password,
+      area,
+      roles,
+      createdBy: actorId,
+      mustChangePassword: true,
+      now: new Date(),
+    });
 
     await this.userRepository.save(user);
     return user;

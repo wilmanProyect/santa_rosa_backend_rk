@@ -1,0 +1,21 @@
+# Se instalan/compilan dentro de la imagen
+node_modules
+dist
+coverage
+
+# Secretos y configuración local: las variables llegan por docker-compose
+.env
+.env.*
+!.env.example
+
+# Sin uso en la imagen
+.git
+.gitignore
+.vscode
+.idea
+test
+docs
+README.md
+Dockerfile
+docker-compose*.yml
+*.log

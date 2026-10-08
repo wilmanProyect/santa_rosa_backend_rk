@@ -1,19 +1,29 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('permissions')
 export class PermissionOrmEntity {
   @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
-  name: string;
+  /** Código estable usado por el código, p. ej. "users:create". */
+  @Column({ unique: true, length: 100 })
+  code: string;
 
-  @Column({ nullable: true })
-  description: string;
+  @Column({ length: 100 })
+  module: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  description: string | null;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

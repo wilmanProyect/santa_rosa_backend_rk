@@ -1,98 +1,89 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Santa Rosa — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API del sistema Santa Rosa: autenticación, usuarios, roles y permisos, y áreas.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**Stack:** NestJS 11 · TypeORM · PostgreSQL 17 · pnpm. Referencia de endpoints en [docs/API.md](docs/API.md) y Swagger en `/docs`.
 
-## Description
+El frontend (`santa_rosa_front_rk`) es un proyecto aparte que corre en su propio contenedor y consume esta API por HTTP.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Configuración
 
 ```bash
-$ pnpm install
+cp .env.example .env
 ```
 
-## Compile and run the project
+Defina al menos `JWT_SECRET` (mínimo 32 caracteres) y `CORS_ORIGINS` con la URL del frontend. Genere el secreto con:
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-## Run tests
+## Correr con Docker (API + base de datos)
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+docker compose up -d --build
 ```
 
-## Deployment
+| Servicio | Contenedor | Puerto en el host |
+| --- | --- | --- |
+| API | `santa_rosa_backend-api-1` | `API_EXTERNAL_PORT` (3000) |
+| PostgreSQL | `santa_rosa_backend-postgres-1` | `DB_EXTERNAL_PORT` (5439) |
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Al arrancar, la API aplica las migraciones pendientes y crea los permisos, el rol **Administrador** y el usuario `admin` / `Admin123` (que debe cambiar la contraseña en el primer ingreso). Los datos de la base persisten en el volumen `santa_rosa_backend_postgres_data`.
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+docker compose logs -f api        # ver logs
+docker compose up -d --build api  # reconstruir la API tras cambios
+docker compose down               # detener (conserva los datos)
+docker compose down -v            # detener y BORRAR la base de datos
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Correr en local (desarrollo con recarga automática)
 
-## Resources
+```bash
+pnpm install
+docker compose up -d postgres     # solo la base de datos
+pnpm start:dev                    # API en http://localhost:3000
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+En este modo la API usa `DB_HOST=localhost` y `DB_PORT=5439` del `.env`.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Migraciones
 
-## Support
+El esquema se gestiona **solo con migraciones** (`synchronize` está apagado). Están en `src/database/migrations` y se aplican solas al arrancar la API (`DB_MIGRATIONS_RUN=true`).
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Al modificar una entidad (`*.orm-entity.ts`):
 
-## Stay in touch
+```bash
+pnpm migration:generate src/database/migrations/NombreDelCambio   # requiere la BD levantada
+pnpm migration:run                                               # o reiniciar la API
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Otros comandos: `pnpm migration:show` (estado), `pnpm migration:revert` (deshace la última) y `pnpm migration:create src/database/migrations/Nombre` (migración vacía para SQL manual).
 
-## License
+Revise siempre el SQL generado antes de confirmarlo.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Scripts
+
+| Script | Qué hace |
+| --- | --- |
+| `pnpm start:dev` | API con recarga automática |
+| `pnpm build` / `pnpm start:prod` | Compilar y correr la versión compilada |
+| `pnpm test` | Tests unitarios |
+| `pnpm lint` | ESLint + Prettier (con corrección automática) |
+
+## Variables de entorno
+
+Ver [.env.example](.env.example). Las principales:
+
+| Variable | Descripción |
+| --- | --- |
+| `DB_*` | Conexión a PostgreSQL. En Docker, `DB_HOST`/`DB_PORT` los fija el compose. |
+| `DB_MIGRATIONS_RUN` | Aplica migraciones al arrancar (por defecto `true`). |
+| `JWT_SECRET` | Secreto para firmar los tokens. **Obligatorio.** |
+| `JWT_ACCESS_TTL_MINUTES` / `JWT_REFRESH_TTL_DAYS` | Duración de los tokens (15 min / 7 días). |
+| `AUTH_MAX_FAILED_ATTEMPTS` / `AUTH_LOCK_MINUTES` | Bloqueo por intentos fallidos (5 / 15 min). |
+| `ADMIN_DEFAULT_USERNAME` / `ADMIN_DEFAULT_PASSWORD` | Admin inicial, creado solo si no hay administradores activos. |
+| `CORS_ORIGINS` | URLs del frontend autorizadas, separadas por coma. |
+| `TRUST_PROXY` | `true` si la API está detrás de un proxy inverso. |
+| `API_EXTERNAL_PORT` / `DB_EXTERNAL_PORT` | Puertos publicados en el host por docker compose. |

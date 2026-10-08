@@ -1,30 +1,67 @@
-version: '3.8'
+# Backend de Santa Rosa: API NestJS + su propia base PostgreSQL.
+# El frontend corre en su propio contenedor y se conecta a la API por HTTP.
+#
+#   docker compose up -d --build     # levanta API + BD
+#   docker compose up -d postgres    # solo la BD (para correr la API con pnpm start:dev)
+#
+# Las variables se leen del archivo .env (ver .env.example).
+name: santa_rosa_backend
 
 services:
-  # Base de Datos PostgreSQL
   postgres:
     image: postgres:17-alpine
-    container_name: santa_rosa_postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-santa_rosa_db}
     ports:
-      - "5439:5432"
+      # Expuesto en el host solo para desarrollo y herramientas (pgAdmin, DBeaver).
+      - "${DB_EXTERNAL_PORT:-5439}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-santa_rosa_db}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
-      - santa_rosa_network
+      - backend
+
+  api:
+    build: .
+    image: santa_rosa_backend:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Dentro de la red de Docker la BD se llama "postgres" y escucha en 5432.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-santa_rosa_db}
+      DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en el archivo .env}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+      AUTH_MAX_FAILED_ATTEMPTS: ${AUTH_MAX_FAILED_ATTEMPTS:-5}
+      AUTH_LOCK_MINUTES: ${AUTH_LOCK_MINUTES:-15}
+      ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-Admin123}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    ports:
+      - "${API_EXTERNAL_PORT:-3000}:3000"
+    networks:
+      - backend
 
 volumes:
   postgres_data:
 
 networks:
-  santa_rosa_network:
+  backend:
     driver: bridge

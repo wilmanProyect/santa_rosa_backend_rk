@@ -1,7 +1,8 @@
 export class Permission {
   constructor(
     private readonly id: string,
-    private name: string,
+    private readonly code: string,
+    private module: string,
     private description: string,
   ) {}
 
@@ -9,15 +10,20 @@ export class Permission {
     return this.id;
   }
 
-  public getName(): string {
-    return this.name;
+  public getCode(): string {
+    return this.code;
+  }
+
+  public getModule(): string {
+    return this.module;
   }
 
   public getDescription(): string {
     return this.description;
   }
 
-  public updateDescription(description: string): void {
+  public updateDetails(module: string, description: string): void {
+    this.module = module;
     this.description = description;
   }
 }

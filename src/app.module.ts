@@ -7,6 +7,7 @@ import { AreasModule } from './modules/areas/areas.module';
 import { RolesPermissionsModule } from './modules/roles-permissions/roles-permissions.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AnimalsModule } from './modules/animals/animals.module';
 import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
@@ -15,6 +16,7 @@ import { buildDataSourceOptions } from './database/database.config';
     RolesPermissionsModule,
     UsersModule,
     AuthModule,
+    AnimalsModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,

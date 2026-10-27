@@ -15,11 +15,11 @@ const EXT = __filename.endsWith('.ts') ? 'ts' : 'js';
 export function buildDataSourceOptions(env: EnvReader): DataSourceOptions {
   return {
     type: 'postgres',
-    host: env('DB_HOST') ?? 'localhost',
-    port: Number(env('DB_PORT') ?? 5432),
-    username: env('DB_USER') ?? 'postgres',
-    password: env('DB_PASSWORD') ?? 'postgres',
-    database: env('DB_NAME') ?? 'santa_rosa_db',
+    host: env('DB_HOST'),
+    port: Number(env('DB_PORT')),
+    username: env('DB_USER'),
+    password: env('DB_PASSWORD'),
+    database: env('DB_NAME'),
     entities: [join(__dirname, '..', '**', `*.orm-entity.${EXT}`)],
     migrations: [join(__dirname, 'migrations', `*.${EXT}`)],
     migrationsTableName: 'migrations',

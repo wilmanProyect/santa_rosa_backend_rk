@@ -1,0 +1,26 @@
+# Configuración de Garage (almacenamiento de archivos compatible con S3).
+# https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/
+#
+# Los secretos NO van aquí: llegan por variables de entorno desde docker-compose
+# (GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN y la clave S3 por defecto).
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+# Copia de seguridad automática de los metadatos cada 6 horas (en metadata_dir).
+metadata_auto_snapshot_interval = "6h"
+
+# Un solo nodo: cada archivo se guarda una vez. Respalde el volumen de datos.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+# Debe coincidir con S3_REGION de la API.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+# API de administración (estado, métricas). No se publica fuera de Docker.
+api_bind_addr = "[::]:3903"

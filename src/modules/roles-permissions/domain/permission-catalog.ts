@@ -27,6 +27,15 @@ export const PERMISSIONS = {
   AREAS_UPDATE: 'areas:update',
   AREAS_DELETE: 'areas:delete',
 
+  ANIMALS_READ: 'animals:read',
+  ANIMALS_CREATE: 'animals:create',
+  ANIMALS_UPDATE: 'animals:update',
+  ANIMALS_CHANGE_STATUS: 'animals:change-status',
+  ANIMALS_DELETE: 'animals:delete',
+  ANIMAL_CATALOGS_MANAGE: 'animal-catalogs:manage',
+  ANIMAL_PHOTOS_UPLOAD: 'animal-photos:upload',
+  ANIMAL_PHOTOS_DELETE: 'animal-photos:delete',
+
   AUDIT_READ: 'audit:read',
 } as const;
 
@@ -116,6 +125,50 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     code: PERMISSIONS.AREAS_DELETE,
     module: 'Áreas',
     description: 'Eliminar áreas',
+  },
+
+  {
+    code: PERMISSIONS.ANIMALS_READ,
+    module: 'Animales',
+    description:
+      'Ver animales, su genealogía y los catálogos de razas y colores',
+  },
+  {
+    code: PERMISSIONS.ANIMALS_CREATE,
+    module: 'Animales',
+    description: 'Registrar animales',
+  },
+  {
+    code: PERMISSIONS.ANIMALS_UPDATE,
+    module: 'Animales',
+    description: 'Editar los datos de los animales y su certificado ABSID',
+  },
+  {
+    code: PERMISSIONS.ANIMALS_CHANGE_STATUS,
+    module: 'Animales',
+    description:
+      'Registrar la salida de animales (muerte, venta, faena, regalo)',
+  },
+  {
+    code: PERMISSIONS.ANIMALS_DELETE,
+    module: 'Animales',
+    description: 'Eliminar animales registrados por error',
+  },
+  {
+    code: PERMISSIONS.ANIMAL_CATALOGS_MANAGE,
+    module: 'Animales',
+    description: 'Administrar los catálogos de razas y colores',
+  },
+  {
+    code: PERMISSIONS.ANIMAL_PHOTOS_UPLOAD,
+    module: 'Animales',
+    description:
+      'Subir fotos de animales, corregir su descripción y fecha, y elegir la foto principal',
+  },
+  {
+    code: PERMISSIONS.ANIMAL_PHOTOS_DELETE,
+    module: 'Animales',
+    description: 'Eliminar fotos del historial de los animales',
   },
 
   {

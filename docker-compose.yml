@@ -1,8 +1,8 @@
-# Backend de Santa Rosa: API NestJS + su propia base PostgreSQL.
+# Backend de Santa Rosa: API NestJS + PostgreSQL + Garage (archivos: fotos y certificados).
 # El frontend corre en su propio contenedor y se conecta a la API por HTTP.
 #
-#   docker compose up -d --build     # levanta API + BD
-#   docker compose up -d postgres    # solo la BD (para correr la API con pnpm start:dev)
+#   docker compose up -d --build            # levanta API + BD + Garage
+#   docker compose up -d postgres garage    # solo BD y Garage (para correr la API con pnpm start:dev)
 #
 # Las variables se leen del archivo .env (ver .env.example).
 name: santa_rosa_backend
@@ -28,12 +28,45 @@ services:
     networks:
       - backend
 
+  # Garage: almacenamiento de archivos compatible con S3 (fotos y certificados).
+  # Un solo nodo: al primer arranque crea el layout, la clave S3_ACCESS_KEY /
+  # S3_SECRET_KEY y el bucket S3_BUCKET. El bucket es privado: el navegador lee
+  # las fotos con URL firmadas y temporales que genera la API.
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Defina GARAGE_RPC_SECRET en el archivo .env}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Defina GARAGE_ADMIN_TOKEN en el archivo .env}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY:?Defina S3_ACCESS_KEY en el archivo .env}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY:?Defina S3_SECRET_KEY en el archivo .env}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-santa-rosa}
+    ports:
+      # API S3: el navegador descarga las fotos desde aquí (S3_PUBLIC_ENDPOINT).
+      # La API de administración (3903) no se publica.
+      - "${GARAGE_S3_EXTERNAL_PORT:-3900}:3900"
+    volumes:
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      # La imagen no trae shell ni curl: se usa el propio binario.
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
   api:
     build: .
     image: santa_rosa_backend:latest
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      garage:
         condition: service_healthy
     environment:
       NODE_ENV: production
@@ -54,6 +87,15 @@ services:
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-Admin123}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Dentro de la red de Docker Garage se llama "garage"; el navegador usa el puerto publicado.
+      S3_ENDPOINT: http://garage:3900
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:3900}
+      # Debe coincidir con s3_region de docker/garage/garage.toml.
+      S3_REGION: garage
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-santa-rosa}
+      S3_PRESIGNED_URL_TTL_SECONDS: ${S3_PRESIGNED_URL_TTL_SECONDS:-900}
     ports:
       - "${API_EXTERNAL_PORT:-3000}:3000"
     networks:
@@ -61,6 +103,8 @@ services:
 
 volumes:
   postgres_data:
+  garage_meta:
+  garage_data:
 
 networks:
   backend:

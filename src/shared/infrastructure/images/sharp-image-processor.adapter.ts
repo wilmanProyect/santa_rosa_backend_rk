@@ -59,6 +59,15 @@ export class SharpImageProcessorAdapter implements IImageProcessor {
     // sharp no copia los metadatos (EXIF, GPS) a la salida salvo que se pida.
     return { content: thumbnail, mimeType: 'image/webp', extension: 'webp' };
   }
+
+  async toJpeg(content: Buffer, maxSide: number): Promise<Buffer> {
+    return sharp(content, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .resize(maxSide, maxSide, { fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' }) // PNG con transparencia → fondo blanco
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  }
 }
 
 /**

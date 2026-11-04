@@ -11,7 +11,8 @@ export const DUPLICATE_IDENTIFIER = 'DUPLICATE_IDENTIFIER';
 export const DUPLICATE_EAR_TAG_AND_ABSID = 'DUPLICATE_EAR_TAG_AND_ABSID';
 
 /**
- * Unicidad del arete y del registro ABSID.
+ * Unicidad del arete y del registro ABSID, dentro de cada especie (ovinos y
+ * caprinos tienen numeración y registro propios).
  *
  * - Por defecto ninguno de los dos puede repetirse entre animales normales
  *   (los que no son caso especial). El arete se compara solo
@@ -35,6 +36,7 @@ export class AnimalIdentifierService {
     const earTag = animal.getEarTag();
     const absidRegistry = animal.getAbsidRegistry();
     const matches = await this.animalRepository.findIdentifierMatches({
+      species: animal.getSpecies(),
       earTag,
       absidRegistry,
       excludeId: animal.getId(),

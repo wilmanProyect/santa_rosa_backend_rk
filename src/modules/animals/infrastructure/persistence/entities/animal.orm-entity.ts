@@ -8,7 +8,6 @@ import {
   PrimaryColumn,
 } from 'typeorm';
 import { AuditableOrmEntity } from '@shared/infrastructure/persistence/audit-columns';
-import { numericTransformer } from '@shared/infrastructure/persistence/numeric.transformer';
 import { sqlIn } from '@shared/infrastructure/persistence/sql-in';
 import {
   AnimalStatus,
@@ -24,22 +23,23 @@ const ALIVE = `'${AnimalStatus.ALIVE}'`;
 const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
 
 @Entity('animals')
-// Arete y registro ABSID son únicos salvo en los animales marcados como caso
-// especial (identifier_exception), que existen así en la cabaña y no se corrigen.
+// Arete y registro ABSID son únicos DENTRO DE CADA ESPECIE (ovinos y caprinos
+// tienen numeración y registro propios), salvo en los animales marcados como
+// caso especial (identifier_exception), que existen así y no se corrigen.
 // El arete es una numeración propia de cada cabaña: no se compara con los externos.
-@Index('UQ_animals_ear_tag_active', ['earTag'], {
+@Index('UQ_animals_ear_tag_active', ['species', 'earTag'], {
   unique: true,
   where:
     '"deleted_at" IS NULL AND NOT "is_external" AND NOT "identifier_exception"',
 })
-@Index('UQ_animals_absid_registry_active', ['absidRegistry'], {
+@Index('UQ_animals_absid_registry_active', ['species', 'absidRegistry'], {
   unique: true,
   where: '"deleted_at" IS NULL AND NOT "identifier_exception"',
 })
 // La misma combinación arete + ABSID no se repite ni como caso especial.
 @Index(
   'UQ_animals_ear_tag_absid_registry_active',
-  ['earTag', 'absidRegistry'],
+  ['species', 'earTag', 'absidRegistry'],
   {
     unique: true,
     where: '"deleted_at" IS NULL',
@@ -61,10 +61,10 @@ const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
   'CHK_animals_genetic_category',
   sqlIn('genetic_category', GeneticCategory),
 )
-// Animales de la cabaña: arete, categoría y origen obligatorios
+// Animales de la cabaña: origen obligatorio, y arete salvo en un caso especial
 @Check(
   'CHK_animals_internal_required',
-  `"is_external" OR ("ear_tag" IS NOT NULL AND "genetic_category" IS NOT NULL AND "entry_origin" IS NOT NULL)`,
+  `"is_external" OR ("entry_origin" IS NOT NULL AND ("ear_tag" IS NOT NULL OR "identifier_exception"))`,
 )
 // Animales externos: identificables, sin ingreso a la cabaña y fuera del inventario
 @Check(
@@ -73,19 +73,16 @@ const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
 )
 @Check(
   'CHK_animals_entry',
-  `"entry_origin" IS NULL OR ("entry_origin" = ${BORN_ON_FARM} AND "birth_date" IS NOT NULL AND "entry_date" IS NULL AND "source_farm" IS NULL) OR ("entry_origin" <> ${BORN_ON_FARM} AND "entry_date" IS NOT NULL)`,
+  `"entry_origin" IS NULL OR ("entry_origin" = ${BORN_ON_FARM} AND "birth_date" IS NOT NULL AND "entry_date" IS NULL AND "source_farm" IS NULL) OR "entry_origin" <> ${BORN_ON_FARM}`,
 )
 @Check(
   'CHK_animals_status_fields',
-  `("status" = ${ALIVE} AND "status_date" IS NULL AND "status_reason" IS NULL) OR ("status" <> ${ALIVE} AND "status_date" IS NOT NULL)`,
+  // La API exige la fecha al registrar una salida; nula solo en datos históricos.
+  `"status" <> ${ALIVE} OR ("status_date" IS NULL AND "status_reason" IS NULL)`,
 )
 @Check(
   'CHK_animals_dates',
-  `("weaning_date" IS NULL OR "birth_date" IS NULL OR "weaning_date" >= "birth_date") AND ("entry_date" IS NULL OR "birth_date" IS NULL OR "entry_date" >= "birth_date") AND ("status_date" IS NULL OR "birth_date" IS NULL OR "status_date" >= "birth_date") AND ("status_date" IS NULL OR "entry_date" IS NULL OR "status_date" >= "entry_date")`,
-)
-@Check(
-  'CHK_animals_weights',
-  `("birth_weight_kg" IS NULL OR "birth_weight_kg" > 0) AND ("weaning_weight_kg" IS NULL OR ("weaning_weight_kg" > 0 AND "weaning_date" IS NOT NULL))`,
+  `("entry_date" IS NULL OR "birth_date" IS NULL OR "entry_date" >= "birth_date") AND ("status_date" IS NULL OR "birth_date" IS NULL OR "status_date" >= "birth_date") AND ("status_date" IS NULL OR "entry_date" IS NULL OR "status_date" >= "entry_date")`,
 )
 @Check('CHK_animals_parents', `"dam_id" <> "id" AND "sire_id" <> "id"`)
 @Check(
@@ -103,7 +100,7 @@ export class AnimalOrmEntity extends AuditableOrmEntity {
   @Column({ name: 'is_external', default: false })
   isExternal: boolean;
 
-  /** Arete. Nulo solo en animales externos. */
+  /** Arete. Nulo en externos y en casos especiales sin arete registrado. */
   @Column({ name: 'ear_tag', type: 'varchar', length: 30, nullable: true })
   earTag: string | null;
 
@@ -222,33 +219,10 @@ export class AnimalOrmEntity extends AuditableOrmEntity {
   @JoinColumn({ name: 'sire_id' })
   sire: AnimalOrmEntity | null;
 
-  // ---------- Nacimiento y destete ----------
+  // ---------- Nacimiento ----------
 
   @Column({ name: 'birth_date', type: 'date', nullable: true })
   birthDate: string | null;
-
-  @Column({
-    name: 'birth_weight_kg',
-    type: 'numeric',
-    precision: 5,
-    scale: 2,
-    nullable: true,
-    transformer: numericTransformer,
-  })
-  birthWeightKg: number | null;
-
-  @Column({ name: 'weaning_date', type: 'date', nullable: true })
-  weaningDate: string | null;
-
-  @Column({
-    name: 'weaning_weight_kg',
-    type: 'numeric',
-    precision: 5,
-    scale: 2,
-    nullable: true,
-    transformer: numericTransformer,
-  })
-  weaningWeightKg: number | null;
 
   // ---------- Ingreso a la cabaña ----------
 

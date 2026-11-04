@@ -87,6 +87,13 @@ services:
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-Admin123}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      FARM_NAME: ${FARM_NAME:-Cabaña Santa Rosa}
+      FARM_TIME_ZONE: ${FARM_TIME_ZONE:-America/La_Paz}
+      FARM_CODE: ${FARM_CODE:-28-A}
+      FARM_BREEDERS: ${FARM_BREEDERS:-Ricardo Limpias Mateff, Katlyn Los}
+      FARM_LOCALITY: ${FARM_LOCALITY:-Portachuelo}
+      FARM_PHONE: ${FARM_PHONE:-69405387}
+      FARM_REGION: ${FARM_REGION:-Santa Cruz - Bolivia}
       # Dentro de la red de Docker Garage se llama "garage"; el navegador usa el puerto publicado.
       S3_ENDPOINT: http://garage:3900
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:3900}
@@ -96,8 +103,12 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-santa-rosa}
       S3_PRESIGNED_URL_TTL_SECONDS: ${S3_PRESIGNED_URL_TTL_SECONDS:-900}
+      BACKUP_DIR: /app/backups
     ports:
       - "${API_EXTERNAL_PORT:-3000}:3000"
+    volumes:
+      # Copias de seguridad generadas por terminal (pnpm backup), en ./backups del servidor.
+      - ./backups:/app/backups
     networks:
       - backend
 

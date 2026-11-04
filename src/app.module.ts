@@ -8,6 +8,8 @@ import { RolesPermissionsModule } from './modules/roles-permissions/roles-permis
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AnimalsModule } from './modules/animals/animals.module';
+import { VeterinaryModule } from './modules/veterinary/veterinary.module';
+import { BackupsModule } from './modules/backups/backups.module';
 import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
@@ -17,6 +19,8 @@ import { buildDataSourceOptions } from './database/database.config';
     UsersModule,
     AuthModule,
     AnimalsModule,
+    VeterinaryModule,
+    BackupsModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,

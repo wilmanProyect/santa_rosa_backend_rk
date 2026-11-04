@@ -12,6 +12,7 @@ import {
 import { Animal } from '../../../domain/models/animal.model';
 import { AnimalOrmEntity } from '../entities/animal.orm-entity';
 import { AnimalMapper } from '../mappers/animal.mapper';
+import { Species } from '../../../domain/enums/animal.enums';
 
 @Injectable()
 export class AnimalTypeormRepository implements IAnimalRepository {
@@ -121,6 +122,7 @@ export class AnimalTypeormRepository implements IAnimalRepository {
   }
 
   async findIdentifierMatches(params: {
+    species: Species;
     earTag: string | null;
     absidRegistry: string | null;
     excludeId: string;
@@ -131,10 +133,10 @@ export class AnimalTypeormRepository implements IAnimalRepository {
               is_external AS "isExternal",
               identifier_exception AS "identifierException"
          FROM animals
-        WHERE deleted_at IS NULL AND id <> $3
+        WHERE deleted_at IS NULL AND id <> $3 AND species = $4
           AND (ear_tag = $1 OR absid_registry = $2)
         ORDER BY created_at`,
-      [params.earTag, params.absidRegistry, params.excludeId],
+      [params.earTag, params.absidRegistry, params.excludeId, params.species],
     );
     return rows;
   }

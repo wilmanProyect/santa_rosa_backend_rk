@@ -22,6 +22,10 @@ export enum AnimalStatus {
   SLAUGHTERED = 'SLAUGHTERED',
   /** Regalado */
   GIFTED = 'GIFTED',
+  /** Intercambiado por otro animal */
+  EXCHANGED = 'EXCHANGED',
+  /** Perdido o extraviado (no se sabe si vive) */
+  LOST = 'LOST',
 }
 
 /** Cómo ingresó el animal a la cabaña. */
@@ -34,6 +38,11 @@ export enum EntryOrigin {
   DONATION = 'DONATION',
   /** Recibido como regalo */
   GIFT = 'GIFT',
+  /**
+   * Inventario inicial: ya estaba en la cabaña al empezar a usar el sistema y
+   * no se sabe si nació en ella. La fecha de nacimiento es opcional.
+   */
+  INITIAL_STOCK = 'INITIAL_STOCK',
 }
 
 /** Categoría genética según ABSID. */

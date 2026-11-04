@@ -53,7 +53,9 @@ export interface IAnimalRepository {
    * Animales (no eliminados, distintos de `excludeId`) con ese arete o ese
    * registro ABSID. Los valores deben venir normalizados (mayúsculas).
    */
+  /** Animales de la misma especie con ese arete o ese registro ABSID. */
   findIdentifierMatches(params: {
+    species: Species;
     earTag: string | null;
     absidRegistry: string | null;
     excludeId: string;

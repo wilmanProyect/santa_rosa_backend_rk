@@ -29,9 +29,6 @@ export class AnimalMapper {
       dam: this.toParent(ormEntity.dam),
       sire: this.toParent(ormEntity.sire),
       birthDate: ormEntity.birthDate,
-      birthWeightKg: ormEntity.birthWeightKg,
-      weaningDate: ormEntity.weaningDate,
-      weaningWeightKg: ormEntity.weaningWeightKg,
       entryOrigin: ormEntity.entryOrigin,
       entryDate: ormEntity.entryDate,
       sourceFarm: ormEntity.sourceFarm,
@@ -75,9 +72,6 @@ export class AnimalMapper {
     ormEntity.dam = this.toReference(domainModel.getDam());
     ormEntity.sire = this.toReference(domainModel.getSire());
     ormEntity.birthDate = domainModel.getBirthDate();
-    ormEntity.birthWeightKg = domainModel.getBirthWeightKg();
-    ormEntity.weaningDate = domainModel.getWeaningDate();
-    ormEntity.weaningWeightKg = domainModel.getWeaningWeightKg();
     ormEntity.entryOrigin = domainModel.getEntryOrigin();
     ormEntity.entryDate = domainModel.getEntryDate();
     ormEntity.sourceFarm = domainModel.getSourceFarm();

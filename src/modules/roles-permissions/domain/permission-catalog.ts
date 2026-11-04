@@ -35,8 +35,18 @@ export const PERMISSIONS = {
   ANIMAL_CATALOGS_MANAGE: 'animal-catalogs:manage',
   ANIMAL_PHOTOS_UPLOAD: 'animal-photos:upload',
   ANIMAL_PHOTOS_DELETE: 'animal-photos:delete',
+  ANIMALS_ISSUE_CERTIFICATE: 'animals:issue-certificate',
+
+  WEIGHINGS_WRITE: 'weighings:write',
+
+  HEALTH_READ: 'health:read',
+  HEALTH_WRITE: 'health:write',
+  HEALTH_OVERRIDE_WITHDRAWAL: 'health:override-withdrawal',
+  VETERINARY_PRODUCTS_MANAGE: 'veterinary-products:manage',
 
   AUDIT_READ: 'audit:read',
+
+  BACKUPS_CREATE: 'backups:create',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -170,11 +180,55 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     module: 'Animales',
     description: 'Eliminar fotos del historial de los animales',
   },
+  {
+    code: PERMISSIONS.ANIMALS_ISSUE_CERTIFICATE,
+    module: 'Animales',
+    description:
+      'Emitir el certificado (PDF) con toda la información del animal',
+  },
+
+  {
+    code: PERMISSIONS.WEIGHINGS_WRITE,
+    module: 'Control de peso',
+    description:
+      'Registrar, corregir y eliminar pesajes (verlos solo requiere animals:read)',
+  },
+
+  {
+    code: PERMISSIONS.HEALTH_READ,
+    module: 'Sanidad',
+    description:
+      'Ver el registro sanitario, los eventos generales y el catálogo de productos veterinarios',
+  },
+  {
+    code: PERMISSIONS.HEALTH_WRITE,
+    module: 'Sanidad',
+    description:
+      'Registrar, corregir y eliminar eventos sanitarios y de manejo',
+  },
+  {
+    code: PERMISSIONS.HEALTH_OVERRIDE_WITHDRAWAL,
+    module: 'Sanidad',
+    description:
+      'Autorizar la faena de un animal en período de retiro (indicando el motivo)',
+  },
+  {
+    code: PERMISSIONS.VETERINARY_PRODUCTS_MANAGE,
+    module: 'Sanidad',
+    description: 'Administrar el catálogo de productos veterinarios',
+  },
 
   {
     code: PERMISSIONS.AUDIT_READ,
     module: 'Auditoría',
     description: 'Ver el historial de inicios de sesión',
+  },
+
+  {
+    code: PERMISSIONS.BACKUPS_CREATE,
+    module: 'Sistema',
+    description:
+      'Descargar una copia de seguridad completa (base de datos, fotos y archivos)',
   },
 ];
 

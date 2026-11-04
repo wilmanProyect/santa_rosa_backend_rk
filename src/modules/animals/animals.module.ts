@@ -2,6 +2,22 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StorageModule } from '@shared/infrastructure/storage/storage.module';
 import { ImagesModule } from '@shared/infrastructure/images/images.module';
+import { VeterinaryModule } from '@modules/veterinary/veterinary.module';
+import { UsersModule } from '@modules/users/users.module';
+import { GenerateAnimalCertificateUseCase } from './application/use-cases/animals/generate-animal-certificate.use-case';
+import { ANIMAL_CERTIFICATE_RENDERER } from './application/ports/animal-certificate-renderer.interface';
+import { PdfkitAnimalCertificateRenderer } from './infrastructure/certificates/pdfkit-animal-certificate.renderer';
+import { AnimalWeighingOrmEntity } from './infrastructure/persistence/entities/animal-weighing.orm-entity';
+import { HealthRecordOrmEntity } from './infrastructure/persistence/entities/health-record.orm-entity';
+import { ANIMAL_WEIGHING_REPOSITORY } from './domain/repositories/animal-weighing.repository.interface';
+import { HEALTH_RECORD_REPOSITORY } from './domain/repositories/health-record.repository.interface';
+import { AnimalWeighingTypeormRepository } from './infrastructure/persistence/repositories/animal-weighing.typeorm.repository';
+import { HealthRecordTypeormRepository } from './infrastructure/persistence/repositories/health-record.typeorm.repository';
+import { WeighingService } from './application/use-cases/weighings/weighing.use-cases';
+import { HealthRecordService } from './application/use-cases/health/health-record.service';
+import { WeighingController } from './infrastructure/controllers/weighing.controller';
+import { HealthRecordController } from './infrastructure/controllers/health-record.controller';
+import { ReminderController } from './infrastructure/controllers/reminder.controller';
 import { BreedOrmEntity } from './infrastructure/persistence/entities/breed.orm-entity';
 import { AnimalColorOrmEntity } from './infrastructure/persistence/entities/animal-color.orm-entity';
 import { AnimalOrmEntity } from './infrastructure/persistence/entities/animal.orm-entity';
@@ -48,7 +64,8 @@ import { AnimalColorController } from './infrastructure/controllers/animal-color
 import { AnimalController } from './infrastructure/controllers/animal.controller';
 
 /**
- * Inventario de animales (ovinos y caprinos), su historial de fotos y los
+ * Inventario de animales (ovinos y caprinos), su historial (fotos, pesajes,
+ * registro sanitario y de manejo), los eventos generales de instalaciones y los
  * catálogos de razas y colores.
  * Los módulos futuros (historial clínico, control de peso, montas) dependerán
  * de ANIMAL_REPOSITORY / GetAnimalUseCase.
@@ -60,15 +77,22 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
       AnimalColorOrmEntity,
       AnimalOrmEntity,
       AnimalPhotoOrmEntity,
+      AnimalWeighingOrmEntity,
+      HealthRecordOrmEntity,
     ]),
     StorageModule,
     ImagesModule,
+    VeterinaryModule,
+    UsersModule,
   ],
   controllers: [
     BreedController,
     AnimalColorController,
     AnimalController,
     AnimalPhotoController,
+    WeighingController,
+    HealthRecordController,
+    ReminderController,
   ],
   providers: [
     { provide: BREED_REPOSITORY, useClass: BreedTypeormRepository },
@@ -77,6 +101,16 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
       useClass: AnimalColorTypeormRepository,
     },
     { provide: ANIMAL_REPOSITORY, useClass: AnimalTypeormRepository },
+    {
+      provide: ANIMAL_WEIGHING_REPOSITORY,
+      useClass: AnimalWeighingTypeormRepository,
+    },
+    {
+      provide: HEALTH_RECORD_REPOSITORY,
+      useClass: HealthRecordTypeormRepository,
+    },
+    WeighingService,
+    HealthRecordService,
     {
       provide: ANIMAL_PHOTO_REPOSITORY,
       useClass: AnimalPhotoTypeormRepository,
@@ -102,6 +136,11 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
     UploadAnimalCertificateUseCase,
     GetAnimalCertificateUseCase,
     DeleteAnimalCertificateUseCase,
+    GenerateAnimalCertificateUseCase,
+    {
+      provide: ANIMAL_CERTIFICATE_RENDERER,
+      useClass: PdfkitAnimalCertificateRenderer,
+    },
     AnimalPhotoUrlService,
     UploadAnimalPhotoUseCase,
     ListAnimalPhotosUseCase,

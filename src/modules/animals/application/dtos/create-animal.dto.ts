@@ -3,13 +3,10 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  Max,
   MaxLength,
-  Min,
 } from 'class-validator';
 import {
   EntryOrigin,
@@ -17,11 +14,6 @@ import {
   Sex,
   Species,
 } from '../../domain/enums/animal.enums';
-
-/** Pesos en kg con hasta 2 decimales (columna numeric(5,2)). */
-export const WEIGHT_RULES = { maxDecimalPlaces: 2 };
-export const MIN_WEIGHT_KG = 0.01;
-export const MAX_WEIGHT_KG = 999.99;
 
 export class CreateAnimalDto {
   @ApiPropertyOptional({
@@ -35,7 +27,8 @@ export class CreateAnimalDto {
 
   @ApiPropertyOptional({
     example: 'SR-0154',
-    description: 'Arete. Obligatorio salvo en animales externos.',
+    description:
+      'Arete. Obligatorio en animales de la cabaña, salvo como caso especial (identifierException) si no tiene arete registrado.',
   })
   @IsString()
   @MaxLength(30)
@@ -67,7 +60,7 @@ export class CreateAnimalDto {
 
   @ApiPropertyOptional({
     enum: GeneticCategory,
-    description: 'Obligatoria salvo en animales externos',
+    description: 'Opcional: se puede completar después',
   })
   @IsEnum(GeneticCategory)
   @IsOptional()
@@ -131,29 +124,11 @@ export class CreateAnimalDto {
   @IsOptional()
   birthDate?: string;
 
-  @ApiPropertyOptional({ example: 4.35, description: 'kg' })
-  @IsNumber(WEIGHT_RULES)
-  @Min(MIN_WEIGHT_KG)
-  @Max(MAX_WEIGHT_KG)
-  @IsOptional()
-  birthWeightKg?: number;
-
-  @ApiPropertyOptional({ example: '2025-11-20' })
-  @IsDateString({ strict: true })
-  @IsOptional()
-  weaningDate?: string;
-
-  @ApiPropertyOptional({ example: 22.5, description: 'kg' })
-  @IsNumber(WEIGHT_RULES)
-  @Min(MIN_WEIGHT_KG)
-  @Max(MAX_WEIGHT_KG)
-  @IsOptional()
-  weaningWeightKg?: number;
-
   @ApiPropertyOptional({
     enum: EntryOrigin,
     default: EntryOrigin.BORN_ON_FARM,
-    description: 'No aplica a animales externos',
+    description:
+      'BORN_ON_FARM=nacido en la cabaña, PURCHASE=compra, DONATION=donación, GIFT=regalo, INITIAL_STOCK=inventario inicial (ya estaba en la cabaña, origen desconocido). No aplica a animales externos.',
   })
   @IsEnum(EntryOrigin)
   @IsOptional()
@@ -161,7 +136,8 @@ export class CreateAnimalDto {
 
   @ApiPropertyOptional({
     example: '2026-03-02',
-    description: 'Obligatoria si el animal no nació en la cabaña',
+    description:
+      'Fecha de ingreso a la cabaña, si se conoce. No se envía si nació en la cabaña.',
   })
   @IsDateString({ strict: true })
   @IsOptional()

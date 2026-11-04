@@ -1,3 +1,5 @@
+import type { Readable } from 'stream';
+
 /**
  * Almacenamiento de archivos binarios (fotos, certificados escaneados, etc.).
  * Las claves son rutas lógicas, p. ej. "animals/<id>/photos/<id>/original.jpg".
@@ -15,6 +17,22 @@ export interface IFileStorage {
   getTemporaryUrl(key: string, options?: TemporaryUrlOptions): Promise<string>;
   /** Segundos de validez de las URL temporales. */
   readonly temporaryUrlTtlSeconds: number;
+
+  /** Recorre todos los archivos guardados (para copias de seguridad). */
+  listAll(): AsyncIterable<StoredObjectInfo>;
+  /** Lee un archivo como stream, sin cargarlo entero en memoria. Null si no existe. */
+  openReadStream(key: string): Promise<StoredObjectStream | null>;
+}
+
+export interface StoredObjectInfo {
+  key: string;
+  size: number;
+}
+
+export interface StoredObjectStream {
+  stream: Readable;
+  size: number;
+  contentType: string;
 }
 
 export interface TemporaryUrlOptions {

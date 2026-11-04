@@ -8,6 +8,9 @@ coverage
 .env.*
 !.env.example
 
+# Copias de seguridad (datos reales)
+backups
+
 # Sin uso en la imagen
 .git
 .gitignore

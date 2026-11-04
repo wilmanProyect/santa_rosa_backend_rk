@@ -3,6 +3,14 @@ import { AnimalParent } from '../../domain/models/animal-parent';
 import { BreedPresenter } from './breed.presenter';
 import { AnimalColorPresenter } from './animal-color.presenter';
 import type { PrimaryPhotoSummary } from '../../application/services/animal-photo-url.service';
+import type { WeightSummary } from '../../domain/repositories/animal-weighing.repository.interface';
+import type { AnimalWithdrawal } from '../../application/use-cases/health/health-record.service';
+
+export interface AnimalDetailExtras {
+  primaryPhoto?: PrimaryPhotoSummary | null;
+  weights?: WeightSummary;
+  withdrawal?: AnimalWithdrawal;
+}
 
 export class AnimalPresenter {
   /** Versión resumida para listados. */
@@ -30,12 +38,10 @@ export class AnimalPresenter {
     };
   }
 
-  /** Versión completa, con datos de ingreso, estado, certificado y auditoría. */
-  static toResponse(
-    animal: Animal,
-    primaryPhoto: PrimaryPhotoSummary | null = null,
-  ) {
+  /** Versión completa, con datos de ingreso, estado, certificado, pesos, retiro y auditoría. */
+  static toResponse(animal: Animal, extras: AnimalDetailExtras = {}) {
     const audit = animal.getAudit();
+    const primaryPhoto = extras.primaryPhoto ?? null;
     const file = animal.getCertificateFile();
     return {
       ...this.toSummary(animal, primaryPhoto),
@@ -50,9 +56,16 @@ export class AnimalPresenter {
         : null,
       externalRegistry: animal.getExternalRegistry(),
       identifierExceptionReason: animal.getIdentifierExceptionReason(),
-      birthWeightKg: animal.getBirthWeightKg(),
-      weaningDate: animal.getWeaningDate(),
-      weaningWeightKg: animal.getWeaningWeightKg(),
+      // Tomados del historial de pesajes.
+      birthWeightKg: extras.weights?.birth?.weightKg ?? null,
+      weaningDate: extras.weights?.weaning?.weighedAt ?? null,
+      weaningWeightKg: extras.weights?.weaning?.weightKg ?? null,
+      lastWeighing: extras.weights?.last ?? null,
+      // Período de retiro vigente hoy (null si no hay).
+      withdrawal:
+        extras.withdrawal?.meat || extras.withdrawal?.milk
+          ? extras.withdrawal
+          : null,
       entryOrigin: animal.getEntryOrigin(),
       entryDate: animal.getEntryDate(),
       sourceFarm: animal.getSourceFarm(),

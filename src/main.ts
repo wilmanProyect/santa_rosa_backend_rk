@@ -14,7 +14,11 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  app.enableCors({ origin: corsOrigins });
+  app.enableCors({
+    origin: corsOrigins,
+    // Para que el frontend lea el nombre y el número de los PDF generados.
+    exposedHeaders: ['Content-Disposition', 'X-Certificate-Number'],
+  });
 
   // Necesario detrás de un proxy inverso para registrar la IP real en el historial de login.
   if (process.env.TRUST_PROXY === 'true') {

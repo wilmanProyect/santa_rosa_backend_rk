@@ -5,19 +5,24 @@ import {
   Delete,
   Get,
   Header,
+  Inject,
   HttpCode,
   HttpStatus,
   Param,
+  ParseBoolPipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Query,
+  Res,
   StreamableFile,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { GenerateAnimalCertificateUseCase } from '../../application/use-cases/animals/generate-animal-certificate.use-case';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -51,6 +56,9 @@ import { ListAnimalsQueryDto } from '../../application/dtos/list-animals-query.d
 import { ChangeAnimalStatusDto } from '../../application/dtos/change-animal-status.dto';
 import { AnimalPresenter } from '../presenters/animal.presenter';
 import { AnimalPhotoUrlService } from '../../application/services/animal-photo-url.service';
+import { HealthRecordService } from '../../application/use-cases/health/health-record.service';
+import { ANIMAL_WEIGHING_REPOSITORY } from '../../domain/repositories/animal-weighing.repository.interface';
+import type { IAnimalWeighingRepository } from '../../domain/repositories/animal-weighing.repository.interface';
 import { Animal } from '../../domain/models/animal.model';
 
 @ApiTags('Animales')
@@ -67,7 +75,11 @@ export class AnimalController {
     private readonly uploadCertificateUseCase: UploadAnimalCertificateUseCase,
     private readonly getCertificateUseCase: GetAnimalCertificateUseCase,
     private readonly deleteCertificateUseCase: DeleteAnimalCertificateUseCase,
+    private readonly generateCertificateUseCase: GenerateAnimalCertificateUseCase,
     private readonly photoUrls: AnimalPhotoUrlService,
+    private readonly health: HealthRecordService,
+    @Inject(ANIMAL_WEIGHING_REPOSITORY)
+    private readonly weighingRepository: IAnimalWeighingRepository,
   ) {}
 
   @Post()
@@ -142,19 +154,20 @@ export class AnimalController {
   @Patch(':id/status')
   @RequirePermissions(PERMISSIONS.ANIMALS_CHANGE_STATUS)
   @ApiOperation({
-    summary: 'Registrar la salida del animal (muerte, venta, faena, regalo)',
+    summary:
+      'Registrar la salida del animal (muerte, venta, faena, regalo, intercambio). La faena se bloquea en período de retiro.',
   })
   async changeStatus(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ChangeAnimalStatusDto,
   ) {
-    const animal = await this.changeAnimalStatusUseCase.execute(
-      actor.id,
+    const { animal, warnings } = await this.changeAnimalStatusUseCase.execute(
+      actor,
       id,
       dto,
     );
-    return this.present(animal);
+    return { ...(await this.present(animal)), warnings };
   }
 
   @Delete(':id')
@@ -233,12 +246,47 @@ export class AnimalController {
     await this.deleteCertificateUseCase.execute(actor.id, id);
   }
 
+  // ---------- Certificado del animal (generado) ----------
+
+  @Get(':id/certificate')
+  @RequirePermissions(PERMISSIONS.ANIMALS_ISSUE_CERTIFICATE)
+  @Header('Cache-Control', 'no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  @ApiProduces('application/pdf')
+  @ApiOperation({
+    summary:
+      'Generar el certificado del animal en PDF (identificación, ABSID, origen, estado, genealogía, pesos y registro sanitario)',
+  })
+  async generateCertificate(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('download', new ParseBoolPipe({ optional: true }))
+    download: boolean | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const certificate = await this.generateCertificateUseCase.execute(
+      actor.id,
+      id,
+    );
+    res.setHeader('X-Certificate-Number', certificate.number);
+    return new StreamableFile(certificate.content, {
+      type: 'application/pdf',
+      length: certificate.content.length,
+      disposition: contentDisposition(certificate.fileName, download === true),
+    });
+  }
+
   /** Ficha completa, con la miniatura de su foto principal. */
   private async present(animal: Animal) {
-    const primaryPhotos = await this.photoUrls.primaryPhotos([animal.getId()]);
-    return AnimalPresenter.toResponse(
-      animal,
-      primaryPhotos.get(animal.getId()) ?? null,
-    );
+    const [primaryPhotos, weights, withdrawal] = await Promise.all([
+      this.photoUrls.primaryPhotos([animal.getId()]),
+      this.weighingRepository.findSummary(animal.getId()),
+      this.health.withdrawal(animal),
+    ]);
+    return AnimalPresenter.toResponse(animal, {
+      primaryPhoto: primaryPhotos.get(animal.getId()) ?? null,
+      weights,
+      withdrawal,
+    });
   }
 }

@@ -26,6 +26,11 @@ Salvo los marcados como **Público**, todos los endpoints exigen un access token
 - [Razas y colores](#razas-y-colores)
 - [Animales](#animales)
 - [Fotos de animales](#fotos-de-animales)
+- [Control de peso](#control-de-peso)
+- [Productos veterinarios](#productos-veterinarios)
+- [Registro sanitario](#registro-sanitario)
+- [Recordatorios](#recordatorios)
+- [Copias de seguridad](#copias-de-seguridad)
 - [Sistema](#sistema)
 - [Modelos de respuesta](#modelos-de-respuesta)
 - [Valores fijos](#valores-fijos)
@@ -94,8 +99,20 @@ En errores de validación, `message` es una lista con un texto por campo:
 | `401` | Sin token, token inválido o expirado, sesión cerrada, usuario dado de baja o credenciales incorrectas. |
 | `403` | Falta un permiso (el mensaje indica cuál) o el usuario debe cambiar su contraseña primero. |
 | `404` | El recurso no existe, o el área, raza o color indicado está inactivo. |
-| `409` | Duplicado (usuario, correo, CI, nombre de rol, área, raza o color, o arete / registro ABSID de un animal), recurso en uso que no se puede eliminar o cambio que rompería la genealogía. |
+| `409` | Duplicado (usuario, correo, CI, nombre de rol, área, raza, color o producto veterinario, arete / registro ABSID de un animal, o un segundo pesaje de nacimiento o destete), recurso en uso que no se puede eliminar, cambio que rompería la genealogía o faena en período de retiro. |
 | `413` | El archivo subido supera el tamaño máximo. |
+
+Algunos errores traen además un campo `code` para que el frontend los reconozca sin leer el mensaje:
+
+| `code` | Estado | Cuándo |
+| --- | --- | --- |
+| `DUPLICATE_IDENTIFIER` | `409` | Arete o ABSID repetido; se puede reintentar como [caso especial](#arete-y-registro-absid-caso-especial). |
+| `DUPLICATE_EAR_TAG_AND_ABSID` | `409` | Misma combinación arete + ABSID que otro animal. |
+| `DUPLICATE_PHOTO` | `409` | La misma foto ya está en el historial del animal. |
+| `DUPLICATE_WEIGHING_TYPE` | `409` | El animal ya tiene un pesaje de nacimiento o de destete. |
+| `WITHDRAWAL_PERIOD` | `409` | Faena de un animal en [período de retiro](#período-de-retiro). Trae `withdrawal`. |
+
+En los lotes (`/weighings/batch`, `/health-records/batch`), el `400` trae `errors: [{ animalId, message }]` con cada animal que falló.
 
 ---
 
@@ -129,7 +146,14 @@ Los define el sistema en [`permission-catalog.ts`](../src/modules/roles-permissi
 | `animal-catalogs:manage` | Animales | Administrar los catálogos de razas y colores |
 | `animal-photos:upload` | Animales | Subir fotos de animales, corregir su descripción y fecha, y elegir la foto principal |
 | `animal-photos:delete` | Animales | Eliminar fotos del historial de los animales |
+| `animals:issue-certificate` | Animales | Emitir el certificado (PDF) con toda la información del animal |
+| `weighings:write` | Control de peso | Registrar, corregir y eliminar pesajes (verlos solo requiere `animals:read`) |
+| `health:read` | Sanidad | Ver el registro sanitario, los eventos generales y el catálogo de productos veterinarios |
+| `health:write` | Sanidad | Registrar, corregir y eliminar eventos sanitarios y de manejo |
+| `health:override-withdrawal` | Sanidad | Autorizar la faena de un animal en período de retiro |
+| `veterinary-products:manage` | Sanidad | Administrar el catálogo de productos veterinarios |
 | `audit:read` | Auditoría | Ver el historial de inicios de sesión |
+| `backups:create` | Sistema | Descargar una copia de seguridad completa (base de datos, fotos y archivos) |
 
 **Permisos efectivos** = permisos de los roles activos del usuario + permisos otorgados individualmente − permisos denegados individualmente. Una denegación gana sobre lo que digan los roles. El frontend puede usar `effectivePermissions` (o `user.permissions` en el login) para mostrar u ocultar opciones.
 
@@ -185,12 +209,31 @@ Los define el sistema en [`permission-catalog.ts`](../src/modules/roles-permissi
 | `PUT` | [`/animals/:id/certificate-file`](#put-animalsidcertificate-file) | `animals:update` |
 | `GET` | [`/animals/:id/certificate-file`](#get-animalsidcertificate-file) | `animals:read` |
 | `DELETE` | [`/animals/:id/certificate-file`](#delete-animalsidcertificate-file) | `animals:update` |
+| `GET` | [`/animals/:id/certificate`](#get-animalsidcertificate) | `animals:issue-certificate` |
 | `POST` | [`/animals/:animalId/photos`](#post-animalsanimalidphotos) | `animal-photos:upload` |
 | `GET` | [`/animals/:animalId/photos`](#get-animalsanimalidphotos) | `animals:read` |
 | `GET` | [`/animals/:animalId/photos/:photoId`](#get-animalsanimalidphotosphotoid) | `animals:read` |
 | `PATCH` | [`/animals/:animalId/photos/:photoId`](#patch-animalsanimalidphotosphotoid) | `animal-photos:upload` |
 | `PUT` | [`/animals/:animalId/photos/:photoId/primary`](#put-animalsanimalidphotosphotoidprimary) | `animal-photos:upload` |
 | `DELETE` | [`/animals/:animalId/photos/:photoId`](#delete-animalsanimalidphotosphotoid) | `animal-photos:delete` |
+| `GET` | [`/animals/:animalId/weighings`](#get-animalsanimalidweighings) | `animals:read` |
+| `POST` | [`/animals/:animalId/weighings`](#post-animalsanimalidweighings) | `weighings:write` |
+| `PATCH` | [`/animals/:animalId/weighings/:id`](#patch--delete-animalsanimalidweighingsid) | `weighings:write` |
+| `DELETE` | [`/animals/:animalId/weighings/:id`](#patch--delete-animalsanimalidweighingsid) | `weighings:write` |
+| `POST` | [`/weighings/batch`](#post-weighingsbatch) | `weighings:write` |
+| `POST` | [`/veterinary-products`](#productos-veterinarios) | `veterinary-products:manage` |
+| `GET` | [`/veterinary-products`](#productos-veterinarios) | `health:read` |
+| `GET` | [`/veterinary-products/:id`](#productos-veterinarios) | `health:read` |
+| `PATCH` | [`/veterinary-products/:id`](#productos-veterinarios) | `veterinary-products:manage` |
+| `DELETE` | [`/veterinary-products/:id`](#productos-veterinarios) | `veterinary-products:manage` |
+| `POST` | [`/health-records`](#post-health-records) | `health:write` |
+| `POST` | [`/health-records/batch`](#post-health-recordsbatch) | `health:write` |
+| `GET` | [`/health-records`](#get-health-records) | `health:read` |
+| `GET` | [`/health-records/:id`](#get--patch--delete-health-recordsid) | `health:read` |
+| `PATCH` | [`/health-records/:id`](#get--patch--delete-health-recordsid) | `health:write` |
+| `DELETE` | [`/health-records/:id`](#get--patch--delete-health-recordsid) | `health:write` |
+| `GET` | [`/reminders`](#recordatorios) | `animals:read` + `health:read` |
+| `GET` | [`/backups/download`](#get-backupsdownload) | `backups:create` |
 | `GET` | [`/`](#get-) | Público |
 
 ---
@@ -630,15 +673,15 @@ Respuesta: [Color](#color). `409` si el nombre ya existe o si el color está en 
 
 Inventario de ovinos y caprinos. Hay dos tipos de registro:
 
-- **Animales de la cabaña** (`isExternal: false`): los del inventario. Exigen arete, categoría genética y origen de ingreso.
+- **Animales de la cabaña** (`isExternal: false`): los del inventario. Exigen origen de ingreso y arete; un animal sin arete registrado se carga como [caso especial](#arete-y-registro-absid-caso-especial). La categoría genética es opcional: se puede completar después.
 - **Animales externos** (`isExternal: true`): reproductores ajenos, como un donante de semen o un carnero de otra cabaña. Se registran **solo para la genealogía**, para poder ponerlos como padre o madre. No requieren arete, no tienen datos de ingreso ni estado y no aparecen en el listado por defecto. Deben tener al menos un dato que los identifique: arete, nombre, registro ABSID o registro externo. `isExternal` no se puede cambiar después del alta.
 
 ### Arete y registro ABSID: caso especial
 
 Se guardan sin espacios alrededor y en mayúsculas.
 
-- **Por defecto son únicos.** Ningún animal normal puede repetir el arete ni el registro ABSID de otro animal normal. El arete solo se compara entre animales de la cabaña, porque un animal externo puede traer el arete de su cabaña de origen. El ABSID se compara con todos.
-- **Caso especial.** Algunos animales existen en la cabaña con un arete o un ABSID repetido y, por política, no se corrigen. Se registran con `identifierException: true` y un `identifierExceptionReason` obligatorio. Un caso especial puede repetir el arete, el ABSID o ambos por separado. Nunca bloquea al animal original con el que los comparte.
+- **Por defecto son únicos dentro de cada especie.** Ovinos y caprinos tienen numeración y registro propios, así que un ovino y un caprino pueden tener el mismo arete o ABSID. Dentro de una especie, ningún animal normal puede repetir el arete ni el ABSID de otro animal normal. El arete solo se compara entre animales de la cabaña, porque un animal externo puede traer el arete de su cabaña de origen.
+- **Caso especial.** Algunos animales existen en la cabaña con un arete o un ABSID repetido, o sin arete registrado, y, por política, no se corrigen. Se registran con `identifierException: true` y un `identifierExceptionReason` obligatorio. Un caso especial puede repetir el arete, el ABSID o ambos por separado. Nunca bloquea al animal original con el que los comparte.
 - **Nunca se repite la combinación arete + ABSID**, ni siquiera como caso especial, porque sería el mismo animal cargado dos veces.
 
 **Flujo sugerido en el frontend (botón "Caso especial"):**
@@ -672,13 +715,13 @@ Se guardan sin espacios alrededor y en mayúsculas.
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
 | `isExternal` | boolean | Por defecto `false`. |
-| `earTag` | string | Arete. Máx. 30. **Obligatorio** en animales de la cabaña. |
+| `earTag` | string | Arete. Máx. 30. **Obligatorio** en animales de la cabaña, salvo como caso especial (`identifierException`) si no tiene arete registrado. |
 | `name` | string | Máx. 100. |
 | `species` **\*** | enum | `SHEEP` \| `GOAT`. |
 | `breedId` **\*** | uuid | Raza **activa de la misma especie**. |
 | `sex` **\*** | enum | `MALE` \| `FEMALE`. |
 | `colorId` | uuid | Color activo. |
-| `geneticCategory` | enum | Ver [valores fijos](#valores-fijos). **Obligatoria** en animales de la cabaña. |
+| `geneticCategory` | enum | Ver [valores fijos](#valores-fijos). Opcional. |
 | `absidRegistry` | string | Registro ABSID. Máx. 50. |
 | `absidCertificateCode` | string | Código del certificado ABSID. Máx. 50. El archivo escaneado se sube aparte. |
 | `externalRegistry` | string | Registro en otra entidad o código del reproductor en el centro de semen. Máx. 100. |
@@ -687,11 +730,8 @@ Se guardan sin espacios alrededor y en mayúsculas.
 | `damId` | uuid | Madre: hembra de la misma especie, nacida antes que la cría. |
 | `sireId` | uuid | Padre: macho de la misma especie, nacido antes que la cría. Puede ser un animal externo. |
 | `birthDate` | `YYYY-MM-DD` | No futura. **Obligatoria** si `entryOrigin` es `BORN_ON_FARM`. |
-| `birthWeightKg` | number | kg, mayor a 0, hasta 999.99 y máx. 2 decimales. |
-| `weaningDate` | `YYYY-MM-DD` | No anterior al nacimiento. |
-| `weaningWeightKg` | number | Igual que el peso al nacer. Requiere `weaningDate`. |
 | `entryOrigin` | enum | Por defecto `BORN_ON_FARM`. No se envía en animales externos. |
-| `entryDate` | `YYYY-MM-DD` | **Obligatoria** si el animal no nació en la cabaña; prohibida si nació en ella. |
+| `entryDate` | `YYYY-MM-DD` | Fecha de ingreso, si se conoce. No anterior al nacimiento. Prohibida si nació en la cabaña. |
 | `sourceFarm` | string | Cabaña de procedencia (o centro de semen, en externos). Máx. 150. Prohibida si nació en la cabaña. |
 | `notes` | string | Observaciones. Máx. 1000. |
 
@@ -710,10 +750,7 @@ Cría nacida en la cabaña, hija de un donante externo:
   "geneticCategory": "G1",
   "damId": "<id de la madre>",
   "sireId": "<id del donante>",
-  "birthDate": "2025-08-14",
-  "birthWeightKg": 4.35,
-  "weaningDate": "2025-11-20",
-  "weaningWeightKg": 22.5
+  "birthDate": "2025-08-14"
 }
 ```
 
@@ -784,7 +821,7 @@ Donante de semen (externo):
 **Permiso:** `animals:update`. Solo cambian los campos enviados, con las mismas reglas que en el alta. Se valida el animal completo resultante.
 
 - Campos: `species`, `breedId`, `sex`, `entryOrigin`, `identifierException`. Poner `identifierException: false` borra el motivo y vuelve a validar que el arete y el ABSID no estén repetidos.
-- Anulables (envíe `null` para vaciarlos): `earTag`, `name`, `colorId`, `geneticCategory`, `absidRegistry`, `absidCertificateCode`, `externalRegistry`, `identifierExceptionReason`, `damId`, `sireId`, `birthDate`, `birthWeightKg`, `weaningDate`, `weaningWeightKg`, `entryDate`, `sourceFarm`, `notes`. Vaciar un campo obligatorio, como el arete de un animal de la cabaña, devuelve `400`.
+- Anulables (envíe `null` para vaciarlos): `earTag`, `name`, `colorId`, `geneticCategory`, `absidRegistry`, `absidCertificateCode`, `externalRegistry`, `identifierExceptionReason`, `damId`, `sireId`, `birthDate`, `entryDate`, `sourceFarm`, `notes`. Vaciar un campo obligatorio, como el arete de un animal de la cabaña, devuelve `400`.
 - Si cambia `species`, envíe también un `breedId` de la nueva especie.
 - `isExternal` no se puede cambiar. El estado y el certificado tienen endpoints propios.
 
@@ -808,15 +845,24 @@ Donante de semen (externo):
 
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
-| `status` **\*** | enum | `ALIVE` \| `DEAD` \| `SOLD` \| `SLAUGHTERED` \| `GIFTED`. |
+| `status` **\*** | enum | `ALIVE` \| `DEAD` \| `SOLD` \| `SLAUGHTERED` \| `GIFTED` \| `EXCHANGED` \| `LOST`. |
 | `date` | `YYYY-MM-DD` | **Obligatoria** si el estado no es `ALIVE`. No futura ni anterior al nacimiento o al ingreso. |
 | `reason` | string | Motivo o detalle (causa de muerte, comprador, etc.). Máx. 500. |
+| `overrideWithdrawal` | boolean | Faenar aunque el animal esté en [período de retiro](#período-de-retiro). Requiere el permiso `health:override-withdrawal`. |
+| `overrideReason` | string | Motivo de la autorización. **Obligatorio** si `overrideWithdrawal` es `true`. Máx. 300. |
 
 ```json
 { "status": "SOLD", "date": "2026-10-20", "reason": "Vendido a Cabaña El Porvenir" }
 ```
 
-**200 OK:** el [AnimalDetalle](#animaldetalle) actualizado.
+**200 OK:** el [AnimalDetalle](#animaldetalle) actualizado, más `warnings: string[]` (avisos que no impidieron el cambio, p. ej. una venta en período de retiro).
+
+| Código | Causa |
+| --- | --- |
+| `409` | `code: "WITHDRAWAL_PERIOD"`: faena de un animal en período de retiro. La respuesta trae `withdrawal` (`endsOn`, `productName`, `appliedAt`). |
+| `403` | `overrideWithdrawal` sin el permiso `health:override-withdrawal`. |
+
+> **Datos históricos.** Los animales importados de la planilla pueden tener una salida sin fecha (`statusDate: null`) o una compra sin fecha de ingreso. La API exige la fecha en cada salida nueva.
 
 ### `DELETE /animals/:id`
 
@@ -851,6 +897,67 @@ curl -X PUT http://localhost:3000/animals/<id>/certificate-file \
 ### `DELETE /animals/:id/certificate-file`
 
 **Permiso:** `animals:update`. Quita el archivo del certificado. El código `absidCertificateCode` se conserva. Responde `204`, o `404` si no había archivo.
+
+### `GET /animals/:id/certificate`
+
+**Permiso:** `animals:issue-certificate`. Genera el **certificado del animal**: un PDF (A4) con toda su información, armado en el momento con los datos vigentes. No confundir con el [certificado ABSID escaneado](#put-animalsidcertificate-file) (`/certificate-file`), que es un archivo que se sube.
+
+| Query | Tipo | Descripción |
+| --- | --- | --- |
+| `download` | `true` \| `false` | Por defecto `false`: el navegador lo muestra (`Content-Disposition: inline`). `true` fuerza la descarga (`attachment`). |
+
+**Contenido del PDF:**
+
+Usa el diseño del "Registro genealógico y certificado de origen" de la cabaña (fondo, logo, lema, cabras, QR a la página informativa). Las imágenes están en `src/modules/animals/infrastructure/certificates/assets/`.
+
+**Página 1 — certificado:**
+
+| Sección | Datos |
+| --- | --- |
+| I. Identificación del ejemplar | Nombre, registro ABSID (y código del certificado ABSID), raza, sexo, fecha de nacimiento y edad, color, categoría, arete, grado de pureza (según la categoría: G1 50 %, G2 75 %, G3 87,5 %, G4 93,75 %, PO 100 %), peso al nacer, peso actual (último pesaje), estado, fecha de registro (fecha de ingreso, o de nacimiento si nació en la cabaña) y código de la cabaña. |
+| II. Genealogía | Padre y madre: arete, nombre, ABSID, raza y sus propios padres (abuelos del animal). |
+| III. Criador y propietario | Criadores responsables, localidad, quién lo emitió, teléfono, fecha y hora de emisión y número de certificado. |
+| Firmas | Un bloque por criador responsable (hasta 3). |
+
+**Páginas siguientes — anexo con el historial:**
+
+| Sección | Datos |
+| --- | --- |
+| Origen y estado | Foto principal (si tiene), origen de ingreso, fecha, cabaña de procedencia, estado (si ya salió, fecha y motivo), registro externo y cantidad de crías. Si es [caso especial](#arete-y-registro-absid-caso-especial), un aviso con el motivo. |
+| Pesos | Al nacer, al destete y el último, más los 15 pesajes más recientes. |
+| Registro sanitario y de manejo | Aviso si hay un período de retiro de carne o leche vigente, más los 15 eventos más recientes (fecha, tipo, producto, dosis y vía, motivo). |
+| Observaciones | Las notas del animal. |
+| Pie | Quién lo emitió (nombre y usuario), fecha y hora, número de certificado y paginación. |
+
+**Número de certificado:** cada emisión genera uno nuevo, con el formato `SR-AAAAMMDD-XXXXXX` (fecha de emisión + 6 caracteres aleatorios). Va impreso en el PDF y en el header `X-Certificate-Number`. El certificado **no se guarda**: si se pide otra vez, sale con un número nuevo y los datos actualizados.
+
+**Respuesta `200`:**
+
+| Header | Valor |
+| --- | --- |
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `inline; filename="certificado-<arete>.pdf"` (o `attachment` con `download=true`). |
+| `X-Certificate-Number` | Número del certificado emitido. |
+| `Cache-Control` | `no-store` |
+
+CORS expone `Content-Disposition` y `X-Certificate-Number`, así que el frontend puede leerlos.
+
+| Código | Causa |
+| --- | --- |
+| `400` | El animal es externo: no pertenece a la cabaña y no se le emite certificado. |
+| `403` | Falta el permiso `animals:issue-certificate`. |
+| `404` | El animal no existe o fue eliminado. |
+
+La fecha y hora de emisión se muestran en la zona horaria `FARM_TIME_ZONE` (por defecto `America/La_Paz`) y los datos de la cabaña salen de estas variables:
+
+| Variable | Por defecto |
+| --- | --- |
+| `FARM_NAME` | Cabaña Santa Rosa |
+| `FARM_CODE` | 28-A |
+| `FARM_BREEDERS` (separados por coma) | Ricardo Limpias Mateff, Katlyn Los |
+| `FARM_LOCALITY` | Portachuelo |
+| `FARM_PHONE` | 69405387 |
+| `FARM_REGION` | Santa Cruz - Bolivia |
 
 ---
 
@@ -932,6 +1039,244 @@ curl -X POST http://localhost:3000/animals/<animalId>/photos \
 ### `DELETE /animals/:animalId/photos/:photoId`
 
 **Permiso:** `animal-photos:delete`. Borrado lógico. Si era la principal, la foto más reciente que queda pasa a serlo. Responde `204`.
+
+---
+
+## Control de peso
+
+Historial de pesajes de cada animal. Es la **única fuente de los pesos**: el peso al nacer y el peso al destete que muestra la ficha del animal salen de aquí (pesajes de tipo `BIRTH` y `WEANING`).
+
+- **Motivo (`type`):** `BIRTH` (nacimiento), `WEANING` (destete), `ROUTINE` (control periódico), `SELECTION` (selección), `ENTRY` (ingreso por compra), `SALE` (venta), `OTHER`. `BIRTH` y `WEANING` se registran **una sola vez** por animal (`409`, `code: "DUPLICATE_WEIGHING_TYPE"`): para cambiarlos, corrija el pesaje existente.
+- **Fecha:** no futura, no anterior al nacimiento ni posterior a la salida del animal (el mismo día de la salida sí, para el pesaje de venta). El peso al nacer, dentro de los 7 días del nacimiento. No se pesan animales externos.
+- **Peso:** kg, mayor a 0, hasta 999.99, máx. 2 decimales.
+- **Condición corporal** (`bodyConditionScore`, opcional): de 1 a 5 en pasos de 0,5.
+- **Peso estimado** (`isEstimated`): sin balanza (cinta, a ojo).
+- **Próximo pesaje** (`nextWeighingAt`, opcional): posterior a la fecha del pesaje. Aparece en los [recordatorios](#recordatorios) hasta que el animal se vuelve a pesar.
+- **Advertencias:** al crear o editar, la respuesta trae `warnings` si el dato parece un error (baja de más del 15 % o ganancia de más de 600 g/día respecto del pesaje anterior). **No impiden guardar**; muéstrelas para que el usuario confirme o corrija.
+
+### `GET /animals/:animalId/weighings`
+
+**Permiso:** `animals:read`. Todos los pesajes, del más antiguo al más reciente (para la curva de crecimiento). Cada uno incluye lo que calcula el sistema:
+
+| Campo | Significado |
+| --- | --- |
+| `ageDays` | Edad del animal el día del pesaje (`null` si no se conoce su nacimiento). |
+| `changeKg` | Diferencia con el pesaje anterior. |
+| `dailyGainG` | Ganancia diaria en gramos desde el pesaje anterior. |
+
+### `POST /animals/:animalId/weighings`
+
+**Permiso:** `weighings:write`.
+
+```json
+{
+  "weighedAt": "2025-02-11",
+  "weightKg": 18.7,
+  "type": "WEANING",
+  "bodyConditionScore": 3.5,
+  "nextWeighingAt": "2025-05-11",
+  "notes": "Destete"
+}
+```
+
+**201 Created:** un [Pesaje](#pesaje) con `warnings`.
+
+### `PATCH` / `DELETE /animals/:animalId/weighings/:id`
+
+**Permiso:** `weighings:write`. `PATCH` corrige los campos enviados (`null` vacía `bodyConditionScore`, `nextWeighingAt` y `notes`) y responde el pesaje con `warnings`. `DELETE` es borrado lógico (`204`).
+
+### `POST /weighings/batch`
+
+**Permiso:** `weighings:write`. Jornada de pesaje: varios animales con la misma fecha y motivo, hasta 500. **Todo o nada**: si un animal no cumple las reglas, no se guarda ninguno y la respuesta `400` trae `errors: [{ animalId, message }]` con cada problema.
+
+```json
+{
+  "weighedAt": "2025-02-11",
+  "type": "WEANING",
+  "nextWeighingAt": "2025-05-11",
+  "notes": "Destete lote 3",
+  "items": [
+    { "animalId": "4c9a...", "weightKg": 18.7 },
+    { "animalId": "7d21...", "weightKg": 10.5, "notes": "Bajo de peso" }
+  ]
+}
+```
+
+**201 Created:** la lista de [Pesajes](#pesaje), cada uno con sus `warnings`. Las notas común y del animal se unen con ` · `.
+
+---
+
+## Productos veterinarios
+
+Catálogo de productos (`/veterinary-products`), base del futuro inventario veterinario (lotes, vencimientos y stock). Sin paginación, ordenado por nombre.
+
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| `POST` | `/veterinary-products` | `veterinary-products:manage` |
+| `GET` | `/veterinary-products?search=&category=&isActive=` | `health:read` |
+| `GET` | `/veterinary-products/:id` | `health:read` |
+| `PATCH` | `/veterinary-products/:id` (también `isActive`) | `veterinary-products:manage` |
+| `DELETE` | `/veterinary-products/:id` | `veterinary-products:manage` |
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `name` **\*** | string | Nombre comercial, máx. 150. Único sin distinguir mayúsculas (`409`). |
+| `category` **\*** | enum | `VACCINE`, `INTERNAL_ANTIPARASITIC`, `EXTERNAL_ANTIPARASITIC`, `ANTIBIOTIC`, `ANTI_INFLAMMATORY`, `VITAMIN_MINERAL`, `DISINFECTANT`, `OTHER`. |
+| `activeIngredient`, `concentration`, `manufacturer`, `presentation` | string | Principio activo, concentración ("1 %"), laboratorio, presentación ("Frasco 500 ml"). |
+| `doseUnit` | enum | `ML`, `G`, `MG`, `TABLET`, `DOSE`. Se usa por defecto al registrar una aplicación. |
+| `defaultRoute` | enum | `ORAL`, `SUBCUTANEOUS`, `INTRAMUSCULAR`, `INTRAVENOUS`, `TOPICAL`, `INTRANASAL`, `POUR_ON`, `IMMERSION`. |
+| `dosageInstructions` | string | Indicaciones, p. ej. "1 ml cada 50 kg". Máx. 500. |
+| `forSheep`, `forGoats` | boolean | Especies autorizadas (por defecto ambas; al menos una). |
+| `meatWithdrawalDays` | int | **Días de retiro de carne** (0 a 365, por defecto 0). |
+| `milkWithdrawalDays` | int | Días de retiro de leche (caprinos), opcional. |
+| `requiresPrescription`, `requiresRefrigeration` | boolean | |
+| `notes` | string | Máx. 1000. |
+
+**Respuesta:** un [Producto veterinario](#producto-veterinario) (o una lista, en el `GET` sin `:id`).
+
+Un producto inactivo no se puede usar en aplicaciones nuevas. Solo se elimina si no figura en ningún registro sanitario (`409`); si no, desactívelo.
+
+---
+
+## Registro sanitario
+
+Eventos sanitarios y de manejo de cada animal, y eventos generales de instalaciones (`/health-records`).
+
+| Categoría | `type` | Qué es |
+| --- | --- | --- |
+| Sanitario (`SANITARY`) | `VACCINATION` | Vacunación |
+| | `INTERNAL_DEWORMING` | Desparasitación interna |
+| | `EXTERNAL_DEWORMING` | Baño / desparasitación externa |
+| | `VITAMINS_MINERALS` | Vitaminas y minerales |
+| | `TREATMENT` | Tratamiento de una enfermedad |
+| | `DIAGNOSIS` | Diagnóstico o examen (ecografía, palpación, laboratorio) |
+| Manejo (`MANAGEMENT`) | `SHEARING` | Esquila |
+| | `HOOF_TRIMMING` | Recorte de pezuñas |
+| | `OTHER_PROCEDURE` | Otro procedimiento (castración, descorne, curación) |
+| Instalaciones (`FACILITY`) | `CORRAL_CLEANING` | Limpieza de corral: **evento general, sin animal** |
+
+### Período de retiro
+
+Si el producto aplicado tiene días de retiro, el evento calcula `meatWithdrawalEndsOn` (y `milkWithdrawalEndsOn`): **la fecha desde la que ya se puede faenar** (o usar la leche). Los días se copian del producto al aplicarlo, así que editar el catálogo después no cambia el historial.
+
+- La ficha del animal muestra el retiro vigente en `withdrawal`.
+- **Faena** (`PATCH /animals/:id/status` con `SLAUGHTERED`): **se bloquea** (`409`, `code: "WITHDRAWAL_PERIOD"`). Un usuario con el permiso `health:override-withdrawal` puede forzarla con `overrideWithdrawal: true` y `overrideReason`. La autorización queda escrita en el motivo del estado.
+- **Venta** (`SOLD`): se permite y la respuesta trae un aviso en `warnings` (puede venderse en pie para reproducción).
+
+### `POST /health-records`
+
+**Permiso:** `health:write`.
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `animalId` | uuid | **Obligatorio**, salvo en `CORRAL_CLEANING` (que no lleva animal). Animal de la cabaña (no externo). |
+| `type` **\*** | enum | Ver la tabla anterior. |
+| `appliedAt` **\*** | `YYYY-MM-DD` | No futura, no anterior al nacimiento ni posterior a la salida del animal. |
+| `isDateEstimated` | boolean | La fecha no es exacta (p. ej. no se anotó en la planilla). |
+| `productId` | uuid | Producto activo del catálogo, autorizado para la especie del animal. |
+| `productBatch` | string | Lote del producto. Máx. 50. |
+| `doseQuantity` + `doseUnit` | number + enum | Van juntos. Si hay producto y se omite la unidad, se usa la del producto. |
+| `route` | enum | Vía. Si se omite, se usa la habitual del producto. |
+| `targetCondition` | string | Enfermedad que se previene o se trata (Clostridiosis, neumonía…). Máx. 150. |
+| `appliedBy` | string | Veterinario o responsable. Máx. 150. |
+| `location` | string | Corral o lugar (sobre todo en eventos generales). Máx. 100. |
+| `nextDoseAt` | `YYYY-MM-DD` | Próxima dosis o refuerzo, posterior a `appliedAt`. Aparece en los [recordatorios](#recordatorios). |
+| `cost` | number | Costo, opcional. |
+| `notes` | string | Máx. 1000. |
+
+```json
+{
+  "animalId": "4c9a...",
+  "type": "VACCINATION",
+  "appliedAt": "2026-05-10",
+  "productId": "<id de la vacuna>",
+  "doseQuantity": 2,
+  "targetCondition": "Clostridiosis",
+  "appliedBy": "Dr. Orlando",
+  "nextDoseAt": "2026-11-10"
+}
+```
+
+**201 Created:** un [Evento sanitario](#evento-sanitario).
+
+### `POST /health-records/batch`
+
+**Permiso:** `health:write`. Aplicación masiva (vacunación, desparasitación de un lote): los mismos campos que el alta, menos `animalId`, más `items: [{ animalId, doseQuantity?, notes? }]` (hasta 500; la dosis de cada animal reemplaza a la común). **Todo o nada**, como el pesaje por lote.
+
+### `GET /health-records`
+
+**Permiso:** `health:read`. Paginado, del más reciente al más antiguo.
+
+| Query | Descripción |
+| --- | --- |
+| `animalId` | Historial sanitario de un animal. |
+| `general=true` | Solo eventos generales (sin animal). |
+| `type` / `category` | Por tipo o por categoría (`SANITARY`, `MANAGEMENT`, `FACILITY`). |
+| `productId` | Eventos con ese producto. |
+| `targetCondition` | Enfermedad / objetivo (búsqueda parcial). |
+| `from`, `to` | Rango de fechas (`YYYY-MM-DD`). |
+
+### `GET` / `PATCH` / `DELETE /health-records/:id`
+
+`GET` (`health:read`) devuelve el evento. `PATCH` (`health:write`) corrige los campos enviados (el animal no se cambia; `null` vacía los opcionales, `productId: null` quita el producto). `DELETE` (`health:write`) es borrado lógico (`204`).
+
+---
+
+## Recordatorios
+
+### `GET /reminders`
+
+**Permisos:** `animals:read` y `health:read`. Lo programado hasta `?until=YYYY-MM-DD` (por defecto, dentro de 7 días), **incluidos los atrasados** (`overdue: true`). Pensado para mostrar alertas en la pantalla de inicio.
+
+```jsonc
+{
+  "weighings": [
+    // Animales vivos cuyo último pesaje programó uno nuevo que aún no se hizo.
+    { "animalId": "...", "earTag": "CSR-27", "name": null, "nextWeighingAt": "2026-11-05",
+      "lastWeighedAt": "2026-08-05", "lastWeightKg": 32.4, "overdue": false }
+  ],
+  "healthDoses": [
+    // Próximas dosis o refuerzos que aún no se aplicaron (sin un evento posterior del mismo tipo).
+    { "recordId": "...", "animalId": "...", "earTag": "10", "name": null, "type": "VACCINATION",
+      "productName": "Vacuna clostridial", "targetCondition": "Clostridiosis", "location": null,
+      "lastAppliedAt": "2026-05-10", "nextDoseAt": "2026-11-10", "overdue": false }
+  ]
+}
+```
+
+---
+
+## Copias de seguridad
+
+### `GET /backups/download`
+
+**Permiso:** `backups:create` (el rol **Administrador** lo tiene). Descarga una **copia de seguridad completa** del sistema en un archivo `.tar.gz`:
+
+| Contenido | Detalle |
+| --- | --- |
+| Base de datos | Volcado completo de PostgreSQL: animales, pesajes, registro sanitario, usuarios, roles, catálogos, etc. |
+| Archivos | Todo el almacenamiento (Garage): fotos de animales, miniaturas y certificados ABSID escaneados. |
+| Manifiesto | Fecha, usuario que la generó, versión de la base, y tamaño y SHA-256 de cada archivo, para verificar el respaldo antes de restaurarlo. |
+
+**Respuesta `200`:** el archivo, con estas cabeceras:
+
+| Cabecera | Valor |
+| --- | --- |
+| `Content-Type` | `application/gzip` |
+| `Content-Disposition` | `attachment; filename="santa-rosa-respaldo-AAAAMMDD-HHMMSS.tar.gz"` (fecha y hora de la cabaña, `FARM_TIME_ZONE`) |
+| `Cache-Control` | `no-store` |
+
+No se envía `Content-Length`: el archivo se genera mientras se descarga. La base se vuelca **antes** de empezar a enviar, así que un error de la base responde `500` en vez de una descarga cortada. Si falla un archivo a mitad de camino, la conexión se corta y el navegador marca la descarga como fallida: no queda un respaldo roto con apariencia de bueno.
+
+**Errores:**
+
+| Código | Cuándo |
+| --- | --- |
+| `401` | Sin token o token vencido. |
+| `403` | Falta el permiso `backups:create`. |
+| `409` | Ya se está generando otra copia de seguridad. Reintente cuando termine. |
+
+**Restaurar** no se hace desde la API, a propósito: reemplaza todos los datos. Se hace por terminal en el servidor (`pnpm restore`, ver el README del backend). El archivo que descarga este endpoint sirve tal cual para restaurar.
 
 ---
 
@@ -1061,13 +1406,13 @@ Se usa en los listados.
 {
   "id": "4c9a...",
   "isExternal": false,
-  "earTag": "SR-0154",                                 // null solo en externos
+  "earTag": "SR-0154",                                 // null en externos y en casos especiales sin arete
   "name": "Lucero",                                    // null
   "species": "SHEEP",                                  // SHEEP | GOAT
   "breed": { "id": "b71c...", "name": "Merino" },
   "sex": "FEMALE",                                     // MALE | FEMALE
   "color": { "id": "e02d...", "name": "Blanco" },      // null
-  "geneticCategory": "G1",                             // null solo en externos
+  "geneticCategory": "G1",                             // null si aún no se clasificó
   "absidRegistry": "ABSID-2025-0311",                  // null
   "identifierException": false,                        // true: caso especial (arete o ABSID repetido)
   "birthDate": "2025-08-14",                           // null si se desconoce
@@ -1099,9 +1444,15 @@ AnimalResumen más estos campos:
   },
   "externalRegistry": null,
   "identifierExceptionReason": null,      // motivo, si es caso especial
-  "birthWeightKg": 4.35,                  // number, null
-  "weaningDate": "2025-11-20",            // null
-  "weaningWeightKg": 22.5,                // number, null
+  // Pesos: tomados del historial de pesajes (no se envían al crear o editar el animal).
+  "birthWeightKg": 4.35,                  // pesaje BIRTH, null
+  "weaningDate": "2025-11-20",            // pesaje WEANING, null
+  "weaningWeightKg": 22.5,                // pesaje WEANING, null
+  "lastWeighing": { "weighedAt": "2026-01-15", "weightKg": 35 },  // null
+  "withdrawal": {                         // período de retiro vigente hoy; null si no hay
+    "meat": { "endsOn": "2026-12-01", "productName": "Ivomec", "appliedAt": "2026-11-03" },  // null
+    "milk": null
+  },
   "entryOrigin": "BORN_ON_FARM",          // null solo en externos
   "entryDate": null,                      // "YYYY-MM-DD" si no nació en la cabaña
   "sourceFarm": null,
@@ -1142,6 +1493,78 @@ AnimalResumen más estos campos:
 }
 ```
 
+### Pesaje
+
+```jsonc
+{
+  "id": "...",
+  "animalId": "...",
+  "weighedAt": "2025-02-11",
+  "weightKg": 18.7,
+  "type": "WEANING",
+  "bodyConditionScore": 3.5,        // null
+  "isEstimated": false,
+  "nextWeighingAt": "2025-05-11",   // null
+  "notes": "Destete",               // null
+  "warnings": [],                   // solo al crear o editar
+  "ageDays": 230, "changeKg": 15.2, "dailyGainG": 185,  // solo en el historial
+  "createdAt": "...", "createdBy": "...", "updatedAt": "...", "updatedBy": "..."
+}
+```
+
+### Producto veterinario
+
+```jsonc
+{
+  "id": "...",
+  "name": "Ivomec",
+  "category": "INTERNAL_ANTIPARASITIC",
+  "activeIngredient": "Ivermectina",       // null
+  "concentration": "1 %",                  // null
+  "manufacturer": null,
+  "presentation": "Frasco 500 ml",         // null
+  "doseUnit": "ML",                        // null
+  "defaultRoute": "SUBCUTANEOUS",          // null
+  "dosageInstructions": "1 ml cada 50 kg", // null
+  "forSheep": true,
+  "forGoats": true,
+  "meatWithdrawalDays": 28,
+  "milkWithdrawalDays": null,
+  "requiresPrescription": false,
+  "requiresRefrigeration": false,
+  "notes": null,
+  "isActive": true,
+  "createdAt": "...", "createdBy": "...", "updatedAt": "...", "updatedBy": "..."
+}
+```
+
+### Evento sanitario
+
+```jsonc
+{
+  "id": "...",
+  "animalId": "...",                       // null en eventos generales
+  "category": "SANITARY",                  // SANITARY | MANAGEMENT | FACILITY
+  "type": "INTERNAL_DEWORMING",
+  "appliedAt": "2026-05-05",
+  "isDateEstimated": false,
+  "product": { "id": "...", "name": "Ivomec" },  // null
+  "productBatch": null,
+  "doseQuantity": 2, "doseUnit": "ML",     // null
+  "route": "SUBCUTANEOUS",                 // null
+  "targetCondition": null,
+  "appliedBy": "Dr. Orlando",
+  "location": null,
+  "meatWithdrawalDays": 28,
+  "meatWithdrawalEndsOn": "2026-06-02",    // desde esta fecha se puede faenar; null si no hay retiro
+  "milkWithdrawalEndsOn": null,
+  "nextDoseAt": null,
+  "cost": null,
+  "notes": null,
+  "createdAt": "...", "createdBy": "...", "updatedAt": "...", "updatedBy": "..."
+}
+```
+
 ---
 
 ## Valores fijos
@@ -1165,11 +1588,49 @@ AnimalResumen más estos campos:
 | `SOLD` | `status` (animal) | Vendido |
 | `SLAUGHTERED` | `status` (animal) | Faenado |
 | `GIFTED` | `status` (animal) | Regalado |
+| `EXCHANGED` | `status` (animal) | Intercambiado por otro animal |
+| `LOST` | `status` (animal) | Perdido o extraviado |
 | `BORN_ON_FARM` | `entryOrigin` | Nacido en la cabaña |
 | `PURCHASE` | `entryOrigin` | Comprado a otra cabaña |
 | `DONATION` | `entryOrigin` | Recibido en donación |
 | `GIFT` | `entryOrigin` | Recibido como regalo |
+| `INITIAL_STOCK` | `entryOrigin` | Inventario inicial: ya estaba en la cabaña al empezar a usar el sistema; no se sabe si nació en ella |
 | `COMMERCIAL` | `geneticCategory` | Comercial / General |
 | `BASE` | `geneticCategory` | Base |
 | `G1` … `G4` | `geneticCategory` | Grado 1 a Grado 4 |
 | `PO` | `geneticCategory` | Puro de origen |
+| `BIRTH` | `type` (pesaje) | Nacimiento (uno por animal) |
+| `WEANING` | `type` (pesaje) | Destete (uno por animal) |
+| `ROUTINE` | `type` (pesaje) | Control periódico |
+| `SELECTION` | `type` (pesaje) | Selección |
+| `ENTRY` | `type` (pesaje) | Ingreso por compra |
+| `SALE` | `type` (pesaje) | Venta |
+| `OTHER` | `type` (pesaje) | Otro |
+| `SANITARY` / `MANAGEMENT` / `FACILITY` | `category` (evento sanitario) | Sanitario / Manejo / Instalaciones |
+| `VACCINATION` | `type` (evento sanitario) | Vacunación |
+| `INTERNAL_DEWORMING` | `type` (evento sanitario) | Desparasitación interna |
+| `EXTERNAL_DEWORMING` | `type` (evento sanitario) | Baño / desparasitación externa |
+| `VITAMINS_MINERALS` | `type` (evento sanitario) | Vitaminas y minerales |
+| `TREATMENT` | `type` (evento sanitario) | Tratamiento |
+| `DIAGNOSIS` | `type` (evento sanitario) | Diagnóstico o examen |
+| `SHEARING` | `type` (evento sanitario) | Esquila |
+| `HOOF_TRIMMING` | `type` (evento sanitario) | Recorte de pezuñas |
+| `OTHER_PROCEDURE` | `type` (evento sanitario) | Otro procedimiento |
+| `CORRAL_CLEANING` | `type` (evento sanitario) | Limpieza de corral (sin animal) |
+| `VACCINE` | `category` (producto) | Vacuna |
+| `INTERNAL_ANTIPARASITIC` | `category` (producto) | Antiparasitario interno |
+| `EXTERNAL_ANTIPARASITIC` | `category` (producto) | Antiparasitario externo |
+| `ANTIBIOTIC` | `category` (producto) | Antibiótico |
+| `ANTI_INFLAMMATORY` | `category` (producto) | Antiinflamatorio |
+| `VITAMIN_MINERAL` | `category` (producto) | Vitaminas y minerales |
+| `DISINFECTANT` | `category` (producto) | Desinfectante |
+| `OTHER` | `category` (producto) | Otro |
+| `ML` / `G` / `MG` / `TABLET` / `DOSE` | `doseUnit` | ml / g / mg / comprimido / dosis |
+| `ORAL` | `route`, `defaultRoute` | Oral |
+| `SUBCUTANEOUS` | `route`, `defaultRoute` | Subcutánea |
+| `INTRAMUSCULAR` | `route`, `defaultRoute` | Intramuscular |
+| `INTRAVENOUS` | `route`, `defaultRoute` | Intravenosa |
+| `TOPICAL` | `route`, `defaultRoute` | Tópica |
+| `INTRANASAL` | `route`, `defaultRoute` | Intranasal |
+| `POUR_ON` | `route`, `defaultRoute` | Pour-on (sobre el lomo) |
+| `IMMERSION` | `route`, `defaultRoute` | Inmersión (baño) |

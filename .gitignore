@@ -1,3 +1,6 @@
+# Copias de seguridad (contienen datos reales)
+/backups
+
 # compiled output
 /dist
 /node_modules

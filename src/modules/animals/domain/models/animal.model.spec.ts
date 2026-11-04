@@ -51,9 +51,26 @@ describe('Animal', () => {
       expect(animal.isInInventory()).toBe(true);
     });
 
-    it('exige arete y categoría genética en los animales de la cabaña', () => {
-      expect(() => buildAnimal({ earTag: '  ' })).toThrow(DomainError);
-      expect(() => buildAnimal({ geneticCategory: null })).toThrow(DomainError);
+    it('exige arete en los animales de la cabaña, salvo como caso especial con motivo', () => {
+      expect(() => buildAnimal({ earTag: '  ' })).toThrow(
+        'arete es obligatorio',
+      );
+      expect(() =>
+        buildAnimal({ earTag: null, identifierException: true }),
+      ).toThrow('motivo del caso especial');
+
+      const withoutTag = buildAnimal({
+        earTag: null,
+        identifierException: true,
+        identifierExceptionReason: 'Sin arete registrado',
+      });
+      expect(withoutTag.getEarTag()).toBeNull();
+    });
+
+    it('la categoría genética es opcional (se completa después)', () => {
+      expect(
+        buildAnimal({ geneticCategory: null }).getGeneticCategory(),
+      ).toBeNull();
     });
 
     it('rechaza una raza de otra especie', () => {
@@ -66,10 +83,12 @@ describe('Animal', () => {
       expect(() => buildAnimal({ birthDate: null })).toThrow(DomainError);
     });
 
-    it('un animal comprado requiere fecha de ingreso, no posterior a hoy', () => {
-      expect(() =>
-        buildAnimal({ entryOrigin: EntryOrigin.PURCHASE, birthDate: null }),
-      ).toThrow('fecha de ingreso es obligatoria');
+    it('en un animal comprado la fecha de ingreso es opcional, pero no futura', () => {
+      const unknownEntry = buildAnimal({
+        entryOrigin: EntryOrigin.PURCHASE,
+        birthDate: null,
+      });
+      expect(unknownEntry.getEntryDate()).toBeNull();
 
       const bought = buildAnimal({
         entryOrigin: EntryOrigin.PURCHASE,
@@ -87,20 +106,28 @@ describe('Animal', () => {
       ).toThrow('no puede ser futura');
     });
 
+    it('inventario inicial: sin fecha de nacimiento ni de ingreso', () => {
+      const initial = buildAnimal({
+        entryOrigin: EntryOrigin.INITIAL_STOCK,
+        birthDate: null,
+      });
+      expect(initial.getBirthDate()).toBeNull();
+      expect(initial.isInInventory()).toBe(true);
+    });
+
     it('un nacido en la cabaña no tiene cabaña de procedencia', () => {
       expect(() => buildAnimal({ sourceFarm: 'Otra cabaña' })).toThrow(
         DomainError,
       );
     });
 
-    it('valida el orden de las fechas y los pesos', () => {
-      expect(() => buildAnimal({ weaningDate: '2024-01-01' })).toThrow(
-        'anterior a la fecha de nacimiento',
-      );
-      expect(() => buildAnimal({ weaningWeightKg: 20 })).toThrow(
-        'fecha de destete junto con el peso',
-      );
-      expect(() => buildAnimal({ birthWeightKg: 0 })).toThrow('mayor a cero');
+    it('valida el orden de las fechas', () => {
+      expect(() =>
+        buildAnimal({
+          entryOrigin: EntryOrigin.PURCHASE,
+          entryDate: '2024-01-01',
+        }),
+      ).toThrow('anterior a la fecha de nacimiento');
     });
   });
 
@@ -234,6 +261,17 @@ describe('Animal', () => {
           NOW,
         ),
       ).toThrow('anterior a la fecha de nacimiento');
+    });
+
+    it('el histórico importado admite una salida sin fecha conocida', () => {
+      const animal = buildAnimal();
+      animal.recordHistoricalStatus(
+        { status: AnimalStatus.EXCHANGED, date: null, reason: 'Intercambio' },
+        NOW,
+      );
+      expect(animal.getStatus()).toBe(AnimalStatus.EXCHANGED);
+      expect(animal.getStatusDate()).toBeNull();
+      expect(animal.isInInventory()).toBe(false);
     });
   });
 

@@ -3,13 +3,10 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  Max,
   MaxLength,
-  Min,
   ValidateIf,
 } from 'class-validator';
 import {
@@ -18,11 +15,6 @@ import {
   Sex,
   Species,
 } from '../../domain/enums/animal.enums';
-import {
-  MAX_WEIGHT_KG,
-  MIN_WEIGHT_KG,
-  WEIGHT_RULES,
-} from './create-animal.dto';
 
 const notNull = (_: object, value: unknown) => value !== null;
 
@@ -128,28 +120,6 @@ export class UpdateAnimalDto {
   @IsDateString({ strict: true })
   @IsOptional()
   birthDate?: string | null;
-
-  @ApiPropertyOptional({ example: 4.35, nullable: true })
-  @ValidateIf(notNull)
-  @IsNumber(WEIGHT_RULES)
-  @Min(MIN_WEIGHT_KG)
-  @Max(MAX_WEIGHT_KG)
-  @IsOptional()
-  birthWeightKg?: number | null;
-
-  @ApiPropertyOptional({ example: '2025-11-20', nullable: true })
-  @ValidateIf(notNull)
-  @IsDateString({ strict: true })
-  @IsOptional()
-  weaningDate?: string | null;
-
-  @ApiPropertyOptional({ example: 22.5, nullable: true })
-  @ValidateIf(notNull)
-  @IsNumber(WEIGHT_RULES)
-  @Min(MIN_WEIGHT_KG)
-  @Max(MAX_WEIGHT_KG)
-  @IsOptional()
-  weaningWeightKg?: number | null;
 
   @ApiPropertyOptional({ enum: EntryOrigin })
   @IsEnum(EntryOrigin)

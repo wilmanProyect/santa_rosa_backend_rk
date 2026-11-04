@@ -23,6 +23,11 @@ export interface IImageProcessor {
   analyze(content: Buffer): Promise<ImageInfo | null>;
   /** Versión reducida para galerías y listados, orientada correctamente. */
   createThumbnail(content: Buffer): Promise<Thumbnail>;
+  /**
+   * JPEG orientado y reducido a `maxSide` píxeles, para incrustar en
+   * documentos (PDF), que no admiten WEBP.
+   */
+  toJpeg(content: Buffer, maxSide: number): Promise<Buffer>;
 }
 
 export const IMAGE_PROCESSOR = Symbol('IImageProcessor');

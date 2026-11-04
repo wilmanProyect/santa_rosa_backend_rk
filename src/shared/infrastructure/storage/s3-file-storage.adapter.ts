@@ -4,13 +4,17 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   NoSuchKey,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 import type {
   IFileStorage,
+  StoredObjectInfo,
+  StoredObjectStream,
   TemporaryUrlOptions,
 } from '@shared/application/ports/file-storage.interface';
 
@@ -127,6 +131,39 @@ export class S3FileStorageAdapter implements IFileStorage, OnModuleInit {
       }),
       { expiresIn: this.temporaryUrlTtlSeconds },
     );
+  }
+
+  async *listAll(): AsyncIterable<StoredObjectInfo> {
+    let token: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of page.Contents ?? []) {
+        if (object.Key) yield { key: object.Key, size: object.Size ?? 0 };
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+  }
+
+  async openReadStream(key: string): Promise<StoredObjectStream | null> {
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      );
+      if (!result.Body) return null;
+      return {
+        stream: result.Body as Readable,
+        size: result.ContentLength ?? 0,
+        contentType: result.ContentType ?? 'application/octet-stream',
+      };
+    } catch (error) {
+      if (error instanceof NoSuchKey) return null;
+      throw error;
+    }
   }
 
   private async ensureBucket(bucket: string): Promise<void> {

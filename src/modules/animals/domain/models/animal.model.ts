@@ -42,9 +42,6 @@ export interface AnimalData {
 
   /** Fechas sin hora, formato YYYY-MM-DD. */
   birthDate: string | null;
-  birthWeightKg: number | null;
-  weaningDate: string | null;
-  weaningWeightKg: number | null;
 
   entryOrigin: EntryOrigin | null;
   entryDate: string | null;
@@ -119,9 +116,6 @@ export class Animal {
       dam: null,
       sire: null,
       birthDate: null,
-      birthWeightKg: null,
-      weaningDate: null,
-      weaningWeightKg: null,
       entryOrigin: isExternal ? null : EntryOrigin.BORN_ON_FARM,
       entryDate: null,
       sourceFarm: null,
@@ -210,18 +204,6 @@ export class Animal {
     return this.props.birthDate;
   }
 
-  public getBirthWeightKg(): number | null {
-    return this.props.birthWeightKg;
-  }
-
-  public getWeaningDate(): string | null {
-    return this.props.weaningDate;
-  }
-
-  public getWeaningWeightKg(): number | null {
-    return this.props.weaningWeightKg;
-  }
-
   public getEntryOrigin(): EntryOrigin | null {
     return this.props.entryOrigin;
   }
@@ -307,13 +289,6 @@ export class Animal {
     if (changes.dam !== undefined) p.dam = changes.dam;
     if (changes.sire !== undefined) p.sire = changes.sire;
     if (changes.birthDate !== undefined) p.birthDate = changes.birthDate;
-    if (changes.birthWeightKg !== undefined) {
-      p.birthWeightKg = changes.birthWeightKg;
-    }
-    if (changes.weaningDate !== undefined) p.weaningDate = changes.weaningDate;
-    if (changes.weaningWeightKg !== undefined) {
-      p.weaningWeightKg = changes.weaningWeightKg;
-    }
     if (changes.entryOrigin !== undefined) p.entryOrigin = changes.entryOrigin;
     if (changes.entryDate !== undefined) p.entryDate = changes.entryDate;
     if (changes.sourceFarm !== undefined) {
@@ -338,6 +313,33 @@ export class Animal {
     },
     now: Date,
   ): void {
+    this.applyStatus(params, now, { requireDate: true });
+  }
+
+  /**
+   * Estado tomado de registros anteriores al sistema (importación). A
+   * diferencia de changeStatus, admite una salida sin fecha conocida.
+   */
+  public recordHistoricalStatus(
+    params: {
+      status: AnimalStatus;
+      date: string | null;
+      reason: string | null;
+    },
+    now: Date,
+  ): void {
+    this.applyStatus(params, now, { requireDate: false });
+  }
+
+  private applyStatus(
+    params: {
+      status: AnimalStatus;
+      date: string | null;
+      reason: string | null;
+    },
+    now: Date,
+    options: { requireDate: boolean },
+  ): void {
     if (this.props.isExternal) {
       throw new DomainError(
         'Los animales externos no forman parte del inventario: no tienen estado',
@@ -347,7 +349,7 @@ export class Animal {
       this.props.statusDate = null;
       this.props.statusReason = null;
     } else {
-      if (!params.date) {
+      if (!params.date && options.requireDate) {
         throw new DomainError('Indique la fecha del cambio de estado');
       }
       this.props.statusDate = params.date;
@@ -404,11 +406,10 @@ export class Animal {
         );
       }
     } else {
-      if (!p.earTag) {
-        throw new DomainError('El arete es obligatorio');
-      }
-      if (!p.geneticCategory) {
-        throw new DomainError('La categoría genética es obligatoria');
+      if (!p.earTag && !p.identifierException) {
+        throw new DomainError(
+          'El arete es obligatorio. Si el animal no tiene arete registrado, regístrelo como caso especial indicando el motivo',
+        );
       }
       if (!p.entryOrigin) {
         throw new DomainError('El origen de ingreso es obligatorio');
@@ -424,24 +425,15 @@ export class Animal {
             'Un animal nacido en la cabaña no tiene fecha de ingreso ni cabaña de procedencia',
           );
         }
-      } else if (!p.entryDate) {
-        throw new DomainError(
-          'La fecha de ingreso es obligatoria si el animal no nació en la cabaña',
-        );
       }
+      // Compras, donaciones, regalos e inventario inicial: la fecha de ingreso
+      // y la de nacimiento son opcionales, porque el histórico no siempre las tiene.
     }
 
     assertNotFuture(p.birthDate, 'La fecha de nacimiento', today);
-    assertNotFuture(p.weaningDate, 'La fecha de destete', today);
     assertNotFuture(p.entryDate, 'La fecha de ingreso', today);
     assertNotFuture(p.statusDate, 'La fecha del estado', today);
 
-    assertNotBefore(
-      p.weaningDate,
-      p.birthDate,
-      'La fecha de destete',
-      'nacimiento',
-    );
     assertNotBefore(
       p.entryDate,
       p.birthDate,
@@ -461,15 +453,9 @@ export class Animal {
       'ingreso',
     );
 
-    assertPositive(p.birthWeightKg, 'El peso al nacer');
-    assertPositive(p.weaningWeightKg, 'El peso al destete');
-    if (p.weaningWeightKg !== null && !p.weaningDate) {
-      throw new DomainError('Indique la fecha de destete junto con el peso');
-    }
-
     if (p.identifierException && !p.identifierExceptionReason) {
       throw new DomainError(
-        'Indique el motivo del caso especial (arete o registro ABSID repetido)',
+        'Indique el motivo del caso especial (arete o registro ABSID repetido o faltante)',
       );
     }
 
@@ -530,11 +516,5 @@ function assertNotBefore(
     throw new DomainError(
       `${field} no puede ser anterior a la fecha de ${referenceName}`,
     );
-  }
-}
-
-function assertPositive(value: number | null, field: string) {
-  if (value !== null && !(value > 0)) {
-    throw new DomainError(`${field} debe ser mayor a cero`);
   }
 }

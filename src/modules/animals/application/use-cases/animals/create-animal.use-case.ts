@@ -44,9 +44,6 @@ export class CreateAnimalUseCase {
       dam: dam ?? null,
       sire: sire ?? null,
       birthDate: dto.birthDate ?? null,
-      birthWeightKg: dto.birthWeightKg ?? null,
-      weaningDate: dto.weaningDate ?? null,
-      weaningWeightKg: dto.weaningWeightKg ?? null,
       // Sin valor: el modelo asume BORN_ON_FARM (o null si es externo).
       entryOrigin: dto.entryOrigin,
       entryDate: dto.entryDate ?? null,

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -14,7 +15,7 @@ export class ChangeAnimalStatusDto {
     enum: AnimalStatus,
     example: AnimalStatus.SOLD,
     description:
-      'ALIVE=vivo, DEAD=muerto, SOLD=vendido, SLAUGHTERED=faenado, GIFTED=regalado. Volver a ALIVE borra la fecha y el motivo.',
+      'ALIVE=vivo, DEAD=muerto, SOLD=vendido, SLAUGHTERED=faenado, GIFTED=regalado, EXCHANGED=intercambiado, LOST=perdido. Volver a ALIVE borra la fecha y el motivo.',
   })
   @IsEnum(AnimalStatus)
   status: AnimalStatus;
@@ -35,4 +36,22 @@ export class ChangeAnimalStatusDto {
   @MaxLength(500)
   @IsOptional()
   reason?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Faenar aunque el animal esté en período de retiro. Requiere el permiso health:override-withdrawal y overrideReason.',
+  })
+  @IsBoolean()
+  @IsOptional()
+  overrideWithdrawal?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'Consumo interno autorizado por el veterinario',
+    description: 'Obligatorio si overrideWithdrawal es true',
+  })
+  @ValidateIf((o: ChangeAnimalStatusDto) => o.overrideWithdrawal === true)
+  @IsString()
+  @MaxLength(300)
+  overrideReason?: string;
 }

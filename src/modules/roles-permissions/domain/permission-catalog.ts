@@ -36,6 +36,7 @@ export const PERMISSIONS = {
   ANIMAL_PHOTOS_UPLOAD: 'animal-photos:upload',
   ANIMAL_PHOTOS_DELETE: 'animal-photos:delete',
   ANIMALS_ISSUE_CERTIFICATE: 'animals:issue-certificate',
+  ANIMALS_CONFIRM_GENETIC_CATEGORY: 'animals:confirm-genetic-category',
 
   WEIGHINGS_WRITE: 'weighings:write',
 
@@ -44,9 +45,18 @@ export const PERMISSIONS = {
   HEALTH_OVERRIDE_WITHDRAWAL: 'health:override-withdrawal',
   VETERINARY_PRODUCTS_MANAGE: 'veterinary-products:manage',
 
+  REPRODUCTION_READ: 'reproduction:read',
+  REPRODUCTION_WRITE: 'reproduction:write',
+  REPRODUCTION_OVERRIDE_KINSHIP: 'reproduction:override-kinship',
+
+  REVIEWS_READ: 'reviews:read',
+  REVIEWS_CREATE: 'reviews:create',
+  REVIEWS_RESOLVE: 'reviews:resolve',
+
   AUDIT_READ: 'audit:read',
 
   BACKUPS_CREATE: 'backups:create',
+  BACKUPS_RESTORE: 'backups:restore',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -188,6 +198,13 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   },
 
   {
+    code: PERMISSIONS.ANIMALS_CONFIRM_GENETIC_CATEGORY,
+    module: 'Animales',
+    description:
+      'Confirmar la categoría genética de un animal según ABSID (la esperada al nacer u otra)',
+  },
+
+  {
     code: PERMISSIONS.WEIGHINGS_WRITE,
     module: 'Control de peso',
     description:
@@ -219,6 +236,43 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   },
 
   {
+    code: PERMISSIONS.REPRODUCTION_READ,
+    module: 'Reproducción',
+    description:
+      'Ver montas, diagnósticos de preñez, partos, indicadores reproductivos y sus recordatorios',
+  },
+  {
+    code: PERMISSIONS.REPRODUCTION_WRITE,
+    module: 'Reproducción',
+    description:
+      'Registrar y corregir montas, diagnósticos, abortos y partos (el parto crea las crías)',
+  },
+  {
+    code: PERMISSIONS.REPRODUCTION_OVERRIDE_KINSHIP,
+    module: 'Reproducción',
+    description:
+      'Autorizar una monta entre animales emparentados (indicando la justificación)',
+  },
+
+  {
+    code: PERMISSIONS.REVIEWS_READ,
+    module: 'Revisión de datos',
+    description:
+      'Ver los avisos de datos por revisar en animales, montas y partos',
+  },
+  {
+    code: PERMISSIONS.REVIEWS_CREATE,
+    module: 'Revisión de datos',
+    description: 'Crear avisos de revisión sobre animales, montas y partos',
+  },
+  {
+    code: PERMISSIONS.REVIEWS_RESOLVE,
+    module: 'Revisión de datos',
+    description:
+      'Marcar un aviso de revisión como corregido (o reabrirlo), indicando qué se hizo',
+  },
+
+  {
     code: PERMISSIONS.AUDIT_READ,
     module: 'Auditoría',
     description: 'Ver el historial de inicios de sesión',
@@ -229,6 +283,12 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     module: 'Sistema',
     description:
       'Descargar una copia de seguridad completa (base de datos, fotos y archivos)',
+  },
+  {
+    code: PERMISSIONS.BACKUPS_RESTORE,
+    module: 'Sistema',
+    description:
+      'Restaurar una copia de seguridad: reemplaza TODOS los datos y archivos actuales (antes se guarda un respaldo del estado actual)',
   },
 ];
 

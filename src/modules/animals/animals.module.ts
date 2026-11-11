@@ -17,7 +17,9 @@ import { WeighingService } from './application/use-cases/weighings/weighing.use-
 import { HealthRecordService } from './application/use-cases/health/health-record.service';
 import { WeighingController } from './infrastructure/controllers/weighing.controller';
 import { HealthRecordController } from './infrastructure/controllers/health-record.controller';
-import { ReminderController } from './infrastructure/controllers/reminder.controller';
+import { GeneticCategoryChangeOrmEntity } from './infrastructure/persistence/entities/genetic-category-change.orm-entity';
+import { GeneticCategoryService } from './application/use-cases/animals/genetic-category.service';
+import { GeneticCategoryController } from './infrastructure/controllers/genetic-category.controller';
 import { BreedOrmEntity } from './infrastructure/persistence/entities/breed.orm-entity';
 import { AnimalColorOrmEntity } from './infrastructure/persistence/entities/animal-color.orm-entity';
 import { AnimalOrmEntity } from './infrastructure/persistence/entities/animal.orm-entity';
@@ -67,8 +69,8 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
  * Inventario de animales (ovinos y caprinos), su historial (fotos, pesajes,
  * registro sanitario y de manejo), los eventos generales de instalaciones y los
  * catálogos de razas y colores.
- * Los módulos futuros (historial clínico, control de peso, montas) dependerán
- * de ANIMAL_REPOSITORY / GetAnimalUseCase.
+ * La reproducción (montas, partos) está en su propio módulo y depende de los
+ * servicios que este exporta.
  */
 @Module({
   imports: [
@@ -79,6 +81,7 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
       AnimalPhotoOrmEntity,
       AnimalWeighingOrmEntity,
       HealthRecordOrmEntity,
+      GeneticCategoryChangeOrmEntity,
     ]),
     StorageModule,
     ImagesModule,
@@ -92,7 +95,7 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
     AnimalPhotoController,
     WeighingController,
     HealthRecordController,
-    ReminderController,
+    GeneticCategoryController,
   ],
   providers: [
     { provide: BREED_REPOSITORY, useClass: BreedTypeormRepository },
@@ -148,7 +151,19 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
     UpdateAnimalPhotoUseCase,
     SetPrimaryAnimalPhotoUseCase,
     DeleteAnimalPhotoUseCase,
+    GeneticCategoryService,
   ],
-  exports: [ANIMAL_REPOSITORY, GetAnimalUseCase],
+  // El módulo de reproducción crea las crías al registrar un parto y arma los
+  // recordatorios (/reminders) junto con los pesajes y las dosis.
+  exports: [
+    ANIMAL_REPOSITORY,
+    ANIMAL_WEIGHING_REPOSITORY,
+    GetAnimalUseCase,
+    GetBreedUseCase,
+    GetAnimalColorUseCase,
+    AnimalIdentifierService,
+    WeighingService,
+    HealthRecordService,
+  ],
 })
 export class AnimalsModule {}

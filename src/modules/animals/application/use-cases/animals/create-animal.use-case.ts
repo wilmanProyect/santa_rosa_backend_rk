@@ -3,6 +3,10 @@ import { ANIMAL_REPOSITORY } from '../../../domain/repositories/animal.repositor
 import type { IAnimalRepository } from '../../../domain/repositories/animal.repository.interface';
 import { Animal } from '../../../domain/models/animal.model';
 import { CreateAnimalDto } from '../../dtos/create-animal.dto';
+import {
+  GeneticCategoryChangeKind,
+  newGeneticCategoryChange,
+} from '../../../domain/models/genetic-category-change';
 import { AnimalGenealogyService } from '../../services/animal-genealogy.service';
 import { AnimalIdentifierService } from '../../services/animal-identifier.service';
 import { GetBreedUseCase } from '../breeds/get-breed.use-case';
@@ -54,7 +58,19 @@ export class CreateAnimalUseCase {
     });
 
     await this.identifiers.assertAvailable(animal);
-    await this.animalRepository.save(animal);
+    const category = animal.getGeneticCategory();
+    await this.animalRepository.save(
+      animal,
+      category
+        ? newGeneticCategoryChange({
+            animalId: animal.getId(),
+            fromCategory: null,
+            toCategory: category,
+            kind: GeneticCategoryChangeKind.MANUAL,
+            createdBy: actorId,
+          })
+        : undefined,
+    );
     return animal;
   }
 }

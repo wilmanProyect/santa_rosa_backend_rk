@@ -10,8 +10,21 @@ import { Animal } from '../../../domain/models/animal.model';
 import { AnimalParent } from '../../../domain/models/animal-parent';
 import { AnimalColor } from '../../../domain/models/animal-color.model';
 import { UpdateAnimalDto } from '../../dtos/update-animal.dto';
+import {
+  GeneticCategoryChangeKind,
+  newGeneticCategoryChange,
+} from '../../../domain/models/genetic-category-change';
 import { AnimalGenealogyService } from '../../services/animal-genealogy.service';
 import { AnimalIdentifierService } from '../../services/animal-identifier.service';
+
+const birthKey = (animal: Animal) =>
+  JSON.stringify([
+    animal.getDam()?.id ?? null,
+    animal.getSire()?.id ?? null,
+    animal.getBirthDate(),
+    animal.getEntryOrigin(),
+    animal.getSex(),
+  ]);
 
 const identifierKey = (animal: Animal) =>
   JSON.stringify([
@@ -65,6 +78,8 @@ export class UpdateAnimalUseCase {
     const sire = await this.resolveParent(dto.sireId, animal.getSire(), id);
 
     const identifiersBefore = identifierKey(animal);
+    const categoryBefore = animal.getGeneticCategory();
+    const birthKeyBefore = birthKey(animal);
 
     animal.update(
       {
@@ -96,9 +111,40 @@ export class UpdateAnimalUseCase {
       await this.identifiers.assertAvailable(animal);
     }
 
+    // La cría de un parto se agrupa por madre y fecha de nacimiento; el padre
+    // del parto sale de sus crías.
+    const birthChanged = birthKey(animal) !== birthKeyBefore;
+    if (birthChanged) await this.assertBirthEditable(animal.getId());
+
     animal.markUpdatedBy(actorId);
-    await this.animalRepository.save(animal);
+    const categoryAfter = animal.getGeneticCategory();
+    await this.animalRepository.save(
+      animal,
+      categoryAfter !== categoryBefore
+        ? newGeneticCategoryChange({
+            animalId: animal.getId(),
+            fromCategory: categoryBefore,
+            toCategory: categoryAfter,
+            kind: GeneticCategoryChangeKind.MANUAL,
+            createdBy: actorId,
+          })
+        : undefined,
+      birthChanged ? { syncHistoricalBirth: { actorId } } : undefined,
+    );
     return animal;
+  }
+
+  /**
+   * Las crías de un parto registrado con su formulario toman la madre, el padre
+   * y la fecha del parto; solo las de partos históricos se pueden corregir aquí.
+   */
+  private async assertBirthEditable(animalId: string): Promise<void> {
+    const link = await this.animalRepository.findBirthLink(animalId);
+    if (link && !link.isHistorical) {
+      throw new ConflictException(
+        `El animal nació en el parto registrado del ${link.birthDate}: su madre, padre y fecha de nacimiento son los del parto`,
+      );
+    }
   }
 
   /** Las crías ya registradas dependen de la especie, el sexo y la fecha de nacimiento. */

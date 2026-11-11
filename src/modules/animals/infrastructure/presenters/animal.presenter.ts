@@ -28,6 +28,7 @@ export class AnimalPresenter {
       sex: animal.getSex(),
       color: AnimalColorPresenter.toSummary(animal.getColor()),
       geneticCategory: animal.getGeneticCategory(),
+      geneticCategoryConfirmed: animal.getGeneticCategoryConfirmed(),
       absidRegistry: animal.getAbsidRegistry(),
       identifierException: animal.getIdentifierException(),
       birthDate: animal.getBirthDate(),

@@ -55,6 +55,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
+  // Subir y restaurar un respaldo grande puede tardar más que los 5 minutos que
+  // Node permite por defecto. Igual que proxy_read_timeout del nginx (900 s).
+  app.getHttpServer().requestTimeout = 900_000;
   console.log(`🚀 Application is running on: http://localhost:${port}`);
   console.log(
     `📚 Swagger documentation available at: http://localhost:${port}/docs`,

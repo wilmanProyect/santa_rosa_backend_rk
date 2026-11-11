@@ -1,10 +1,12 @@
 # Santa Rosa — Backend
 
-API del sistema Santa Rosa: autenticación, usuarios, roles y permisos, áreas e inventario de animales (ovinos y caprinos).
+API del sistema Santa Rosa: autenticación, usuarios, roles y permisos, áreas, inventario de animales (ovinos y caprinos) con su control de peso y registro sanitario, y reproducción (montas, partos y categoría genética).
 
 **Stack:** NestJS 11 · TypeORM · PostgreSQL 17 · pnpm. Referencia de endpoints en [docs/API.md](docs/API.md) y Swagger en `/docs`.
 
 El frontend (`santa_rosa_front_rk`) es un proyecto aparte que corre en su propio contenedor y consume esta API por HTTP.
+
+Para publicarlo en un servidor, ver [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Configuración
 
@@ -96,7 +98,10 @@ Los respaldos quedan en la carpeta `./backups` del servidor, montada en el conte
 
 ### Restaurar
 
-Restaurar **reemplaza todos los datos y archivos actuales** por los del respaldo. Por eso se hace solo por terminal:
+Restaurar **reemplaza todos los datos y archivos actuales** por los del respaldo. Se puede hacer de dos formas:
+
+- **Desde el sistema** (pantalla Copias de seguridad, permiso `backups:restore`): se sube el respaldo o se elige uno de `./backups`, se revisa de cuándo es y se confirma escribiendo `RESTAURAR`. Hace los mismos pasos que la terminal y además aplica las migraciones pendientes sin reiniciar. Endpoints en [docs/API.md](docs/API.md#restaurar).
+- **Por terminal:**
 
 ```bash
 pnpm restore santa-rosa-respaldo-20261104-153801.tar.gz   # el archivo debe estar en ./backups
@@ -110,6 +115,8 @@ docker compose restart api                                # aplica las migracion
 5. Sube los archivos del respaldo y borra de Garage los que no estaban en él.
 
 Opciones: `--yes` omite la confirmación (para scripts) y `--sin-respaldo-previo` omite el paso 3.
+
+Un respaldo subido desde el sistema puede pesar hasta `BACKUP_UPLOAD_MAX_MB` (2048 MB por defecto). Detrás de Cloudflare, el límite real es de **100 MB por petición** (plan gratuito): un respaldo más grande se copia a `./backups` del servidor (por ejemplo con `scp`) y se restaura desde la lista "Desde la carpeta del servidor".
 
 En un servidor Linux, la carpeta `./backups` debe poder escribirla el usuario `node` del contenedor (uid 1000): `mkdir -p backups && sudo chown 1000:1000 backups`.
 
@@ -148,4 +155,5 @@ Ver [.env.example](.env.example). Las principales:
 | `TRUST_PROXY` | `true` si la API está detrás de un proxy inverso. |
 | `FARM_NAME` / `FARM_TIME_ZONE` | Nombre de la cabaña y zona horaria impresos en el certificado del animal (por defecto "Cabaña Santa Rosa" / `America/La_Paz`). |
 | `FARM_CODE` / `FARM_BREEDERS` / `FARM_LOCALITY` / `FARM_PHONE` / `FARM_REGION` | Código de la cabaña, criadores responsables (separados por coma), localidad, teléfono y región impresos en el certificado. Ver `.env.example`. |
+| `BACKUP_UPLOAD_MAX_MB` | Tamaño máximo de un respaldo subido para restaurarlo desde el sistema (por defecto 2048). |
 | `API_EXTERNAL_PORT` / `DB_EXTERNAL_PORT` / `GARAGE_S3_EXTERNAL_PORT` | Puertos publicados en el host por docker compose. |

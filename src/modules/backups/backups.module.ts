@@ -4,16 +4,15 @@ import { StorageModule } from '@shared/infrastructure/storage/storage.module';
 import { DATABASE_DUMPER } from './application/ports/database-dumper.interface';
 import { BACKUP_TIME_ZONE, BackupService } from './application/backup.service';
 import { PostgresDumperAdapter } from './infrastructure/postgres-dumper.adapter';
-import { BackupController } from './infrastructure/backup.controller';
 
 /**
  * Copias de seguridad completas: base de datos + archivos del almacenamiento.
- * Se descargan desde el sistema (GET /backups/download) o se generan y
- * restauran por terminal (src/modules/backups/cli/backup.cli.ts).
+ * Este módulo no depende de TypeORM: lo usa también la terminal
+ * (src/modules/backups/cli/backup.cli.ts). Los endpoints están en
+ * BackupsHttpModule.
  */
 @Module({
   imports: [StorageModule],
-  controllers: [BackupController],
   providers: [
     BackupService,
     {

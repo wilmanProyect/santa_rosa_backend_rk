@@ -90,6 +90,10 @@ const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
   `num_nonnulls("certificate_file_key", "certificate_file_name", "certificate_file_mime_type", "certificate_file_size", "certificate_file_uploaded_at") IN (0, 5)`,
 )
 @Check(
+  'CHK_animals_genetic_category_confirmed',
+  `NOT "genetic_category_confirmed" OR "genetic_category" IS NOT NULL`,
+)
+@Check(
   'CHK_animals_identifier_exception',
   `("identifier_exception" AND "identifier_exception_reason" IS NOT NULL) OR (NOT "identifier_exception" AND "identifier_exception_reason" IS NULL)`,
 )
@@ -135,6 +139,10 @@ export class AnimalOrmEntity extends AuditableOrmEntity {
     nullable: true,
   })
   geneticCategory: GeneticCategory | null;
+
+  /** false: categoría esperada (calculada al nacer), pendiente de confirmar por ABSID. */
+  @Column({ name: 'genetic_category_confirmed', default: false })
+  geneticCategoryConfirmed: boolean;
 
   @Column({
     name: 'absid_registry',

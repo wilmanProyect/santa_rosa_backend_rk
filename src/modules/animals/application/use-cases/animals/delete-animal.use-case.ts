@@ -25,6 +25,13 @@ export class DeleteAnimalUseCase {
       );
     }
 
+    const breeding = await this.animalRepository.countBreedingRecords(id);
+    if (breeding.services > 0 || breeding.births > 0) {
+      throw new ConflictException(
+        `No se puede eliminar el animal: figura en ${breeding.services} monta(s) y ${breeding.births} parto(s). Elimine primero las montas cargadas por error o, para una salida del inventario, cambie su estado.`,
+      );
+    }
+
     await this.animalRepository.softDelete(id, actorId);
   }
 }

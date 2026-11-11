@@ -13,15 +13,15 @@ import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { createReadStream, createWriteStream, existsSync } from 'fs';
-import { mkdir, readdir, rename, stat, unlink } from 'fs/promises';
+import { createReadStream, existsSync } from 'fs';
 import { basename, isAbsolute, join } from 'path';
 import { createInterface } from 'readline/promises';
 import { BackupsModule } from '../backups.module';
 import {
   BackupService,
   formatBytes,
-  type PreparedBackup,
+  listBackupFiles,
+  type SavedBackup,
 } from '../application/backup.service';
 
 @Module({
@@ -55,7 +55,7 @@ async function main() {
   try {
     const service = app.get(BackupService);
     if (command === 'backup') {
-      await saveBackup(await service.prepare(cliActor()));
+      report(await service.saveToDirectory(cliActor(), BACKUP_DIR));
       return;
     }
 
@@ -96,18 +96,24 @@ async function main() {
           return;
         }
       }
-      if (!flags.has('--sin-respaldo-previo')) {
-        console.log('Respaldando el estado actual antes de restaurar...');
-        const saved = await saveBackup(
-          await service.prepare(cliActor()),
-          'antes-de-restaurar-',
-        );
+      const safetyCopyDir = flags.has('--sin-respaldo-previo')
+        ? null
+        : BACKUP_DIR;
+      console.log(
+        safetyCopyDir
+          ? 'Respaldando el estado actual y restaurando...'
+          : 'Restaurando...',
+      );
+      const result = await service.restoreVerified(backup, {
+        actor: cliActor(),
+        safetyCopyDir,
+      });
+      if (result.safetyCopy) {
+        report(result.safetyCopy);
         console.log(
-          `  Si necesita volver atrás: pnpm restore ${basename(saved)}`,
+          `  Si necesita volver atrás: pnpm restore ${result.safetyCopy.fileName}`,
         );
       }
-      console.log('Restaurando...');
-      const result = await backup.restore();
       console.log(
         `\nRestauración completada: base de datos y ${result.uploaded} archivos` +
           (result.deleted
@@ -127,39 +133,20 @@ function cliActor() {
   return { source: 'cli' as const, userId: null, username: null };
 }
 
-/** Escribe el respaldo en BACKUP_DIR (primero con extensión .partial). */
-async function saveBackup(
-  backup: PreparedBackup,
-  prefix = '',
-): Promise<string> {
-  await mkdir(BACKUP_DIR, { recursive: true });
-  const path = join(BACKUP_DIR, `${prefix}${backup.fileName}`);
-  const partial = `${path}.partial`;
-  try {
-    const manifest = await backup.writeTo(createWriteStream(partial));
-    await rename(partial, path);
-    console.log(
-      `Respaldo guardado: ${path}\n  ${formatBytes((await stat(path)).size)} · base ${formatBytes(manifest.database.size)} · ${manifest.files.length} archivos`,
-    );
-    return path;
-  } catch (error) {
-    await unlink(partial).catch(() => undefined);
-    throw error;
-  }
+function report(saved: SavedBackup) {
+  console.log(
+    `Respaldo guardado: ${saved.path}\n  ${formatBytes(saved.size)} · base ${formatBytes(saved.manifest.database.size)} · ${saved.manifest.files.length} archivos`,
+  );
 }
 
 async function list() {
-  const names = existsSync(BACKUP_DIR)
-    ? (await readdir(BACKUP_DIR)).filter((n) => n.endsWith('.tar.gz')).sort()
-    : [];
-  if (!names.length) {
+  const files = await listBackupFiles(BACKUP_DIR);
+  if (!files.length) {
     console.log(`No hay respaldos en ${BACKUP_DIR}`);
     return;
   }
-  for (const name of names) {
-    console.log(
-      `${name}  ${formatBytes((await stat(join(BACKUP_DIR, name))).size)}`,
-    );
+  for (const f of [...files].reverse()) {
+    console.log(`${f.fileName}  ${formatBytes(f.size)}`);
   }
 }
 

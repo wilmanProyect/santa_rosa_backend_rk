@@ -60,6 +60,13 @@ export interface AnimalProps extends AnimalData {
    */
   isExternal: boolean;
 
+  /**
+   * false: la categoría es la esperada según los padres (calculada al nacer) y
+   * falta que ABSID la confirme. true: confirmada (o cargada a mano desde el
+   * certificado). Siempre false si no hay categoría.
+   */
+  geneticCategoryConfirmed: boolean;
+
   status: AnimalStatus;
   statusDate: string | null;
   /** Detalle del estado (causa de muerte, comprador, etc.). */
@@ -95,9 +102,12 @@ export class Animal {
         isExternal: boolean;
         createdBy: string | null;
         now: Date;
+        /** false: la categoría es solo la esperada (cría registrada en un parto). */
+        geneticCategoryConfirmed?: boolean;
       },
   ): Animal {
-    const { isExternal, createdBy, now, ...data } = params;
+    const { isExternal, createdBy, now, geneticCategoryConfirmed, ...data } =
+      params;
     const animal = new Animal({
       id: new UUID().getValue(),
       isExternal,
@@ -108,6 +118,7 @@ export class Animal {
       sex: data.sex,
       color: null,
       geneticCategory: null,
+      geneticCategoryConfirmed: false,
       absidRegistry: null,
       absidCertificateCode: null,
       externalRegistry: null,
@@ -127,6 +138,9 @@ export class Animal {
       audit: newAuditInfo(createdBy),
     });
     animal.update(data, now);
+    if (geneticCategoryConfirmed === false) {
+      animal.props.geneticCategoryConfirmed = false;
+    }
     return animal;
   }
 
@@ -166,6 +180,10 @@ export class Animal {
 
   public getGeneticCategory(): GeneticCategory | null {
     return this.props.geneticCategory;
+  }
+
+  public getGeneticCategoryConfirmed(): boolean {
+    return this.props.geneticCategoryConfirmed;
   }
 
   public getAbsidRegistry(): string | null {
@@ -264,8 +282,13 @@ export class Animal {
     if (changes.breed !== undefined) p.breed = changes.breed;
     if (changes.sex !== undefined) p.sex = changes.sex;
     if (changes.color !== undefined) p.color = changes.color;
-    if (changes.geneticCategory !== undefined) {
+    if (
+      changes.geneticCategory !== undefined &&
+      changes.geneticCategory !== p.geneticCategory
+    ) {
+      // Cargada a mano: se toma del certificado, así que queda confirmada.
       p.geneticCategory = changes.geneticCategory;
+      p.geneticCategoryConfirmed = changes.geneticCategory !== null;
     }
     if (changes.absidRegistry !== undefined) {
       p.absidRegistry = normalizeCode(changes.absidRegistry);
@@ -357,6 +380,26 @@ export class Animal {
     }
     this.props.status = params.status;
     this.assertInvariants(now);
+  }
+
+  // ---------- Categoría genética ----------
+
+  /**
+   * ABSID confirma la categoría esperada, o asigna otra tras la inspección.
+   * Devuelve la categoría anterior.
+   */
+  public confirmGeneticCategory(
+    category: GeneticCategory,
+  ): GeneticCategory | null {
+    if (this.props.isExternal) {
+      throw new DomainError(
+        'Los animales externos no forman parte de la cabaña: su categoría no se confirma aquí',
+      );
+    }
+    const previous = this.props.geneticCategory;
+    this.props.geneticCategory = category;
+    this.props.geneticCategoryConfirmed = true;
+    return previous;
   }
 
   // ---------- Certificado ABSID ----------

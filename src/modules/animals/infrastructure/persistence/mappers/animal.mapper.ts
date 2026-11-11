@@ -20,6 +20,7 @@ export class AnimalMapper {
         ? AnimalColorMapper.toDomain(ormEntity.color)
         : null,
       geneticCategory: ormEntity.geneticCategory,
+      geneticCategoryConfirmed: ormEntity.geneticCategoryConfirmed,
       absidRegistry: ormEntity.absidRegistry,
       absidCertificateCode: ormEntity.absidCertificateCode,
       externalRegistry: ormEntity.externalRegistry,
@@ -58,6 +59,8 @@ export class AnimalMapper {
     ormEntity.sex = domainModel.getSex();
     ormEntity.color = AnimalColorMapper.toReference(domainModel.getColor());
     ormEntity.geneticCategory = domainModel.getGeneticCategory();
+    ormEntity.geneticCategoryConfirmed =
+      domainModel.getGeneticCategoryConfirmed();
     ormEntity.absidRegistry = domainModel.getAbsidRegistry();
     ormEntity.absidCertificateCode = domainModel.getAbsidCertificateCode();
     ormEntity.externalRegistry = domainModel.getExternalRegistry();

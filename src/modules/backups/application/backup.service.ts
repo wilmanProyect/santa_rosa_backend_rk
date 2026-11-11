@@ -1,7 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { createReadStream, createWriteStream } from 'fs';
-import { mkdtemp, readFile, rm, stat } from 'fs/promises';
+import { createReadStream, createWriteStream, existsSync } from 'fs';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  unlink,
+} from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Readable, Transform, Writable } from 'stream';
@@ -79,9 +88,35 @@ export interface VerifiedBackup {
   dispose(): Promise<void>;
 }
 
+/** Respaldo guardado en la carpeta de respaldos del servidor. */
+export interface SavedBackup {
+  fileName: string;
+  path: string;
+  size: number;
+  manifest: BackupManifest;
+}
+
+/** Archivo de la carpeta de respaldos del servidor. */
+export interface BackupFileInfo {
+  fileName: string;
+  size: number;
+  modifiedAt: Date;
+}
+
+export interface RestoreResult {
+  uploaded: number;
+  deleted: number;
+  /** Respaldo del estado anterior, generado antes de restaurar. */
+  safetyCopy: SavedBackup | null;
+}
+
 export class BackupInProgressError extends Error {
-  constructor() {
-    super('Ya se está generando una copia de seguridad. Espere a que termine.');
+  constructor(kind: 'backup' | 'restore' = 'backup') {
+    super(
+      kind === 'restore'
+        ? 'Hay una restauración en curso. Espere a que termine.'
+        : 'Ya se está generando una copia de seguridad. Espere a que termine.',
+    );
   }
 }
 
@@ -89,10 +124,14 @@ export class InvalidBackupError extends Error {}
 
 const ENTRY_NAME = /^(FORMAT|database\.dump|manifest\.json|files\/\d{6})$/;
 
+/** Nombres aceptados para los archivos de la carpeta de respaldos. */
+export const BACKUP_FILE_NAME = /^[\w.-]+\.tar\.gz$/;
+
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
-  private running = false;
+  /** Un solo respaldo o restauración a la vez. */
+  private busy: 'backup' | 'restore' | null = null;
 
   constructor(
     @Inject(DATABASE_DUMPER) private readonly dumper: IDatabaseDumper,
@@ -106,14 +145,62 @@ export class BackupService {
    * informe como error y no como una descarga cortada.
    */
   async prepare(actor: BackupActor, now = new Date()): Promise<PreparedBackup> {
-    if (this.running) throw new BackupInProgressError();
-    this.running = true;
+    if (this.busy) throw new BackupInProgressError(this.busy);
+    this.busy = 'backup';
+    try {
+      return await this.build(actor, now, () => (this.busy = null));
+    } catch (error) {
+      this.busy = null;
+      throw error;
+    }
+  }
+
+  /** Genera un respaldo y lo guarda en `dir` (primero como .partial). */
+  async saveToDirectory(
+    actor: BackupActor,
+    dir: string,
+    prefix = '',
+  ): Promise<SavedBackup> {
+    return writeBackupFile(await this.prepare(actor), dir, prefix);
+  }
+
+  /**
+   * Restaura un respaldo ya verificado. Si se indica `safetyCopyDir`, antes
+   * guarda allí un respaldo del estado actual ("antes-de-restaurar-…"); si ese
+   * respaldo falla, no se restaura nada.
+   */
+  async restoreVerified(
+    backup: VerifiedBackup,
+    options: { actor: BackupActor; safetyCopyDir: string | null },
+  ): Promise<RestoreResult> {
+    if (this.busy) throw new BackupInProgressError(this.busy);
+    this.busy = 'restore';
+    try {
+      const safetyCopy = options.safetyCopyDir
+        ? await writeBackupFile(
+            await this.build(options.actor, new Date(), () => undefined),
+            options.safetyCopyDir,
+            'antes-de-restaurar-',
+          )
+        : null;
+      const result = await backup.restore();
+      return { ...result, safetyCopy };
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  private async build(
+    actor: BackupActor,
+    now: Date,
+    onRelease: () => void,
+  ): Promise<PreparedBackup> {
     const dir = await mkdtemp(join(tmpdir(), 'santa-rosa-backup-'));
     let released = false;
     const release = async () => {
       if (released) return;
       released = true;
-      this.running = false;
+      onRelease();
       await rm(dir, { recursive: true, force: true });
     };
     try {
@@ -322,6 +409,41 @@ export class BackupService {
       await dispose();
       throw error;
     }
+  }
+}
+
+/** Respaldos (.tar.gz) de la carpeta, del más reciente al más antiguo. */
+export async function listBackupFiles(dir: string): Promise<BackupFileInfo[]> {
+  if (!existsSync(dir)) return [];
+  const files: BackupFileInfo[] = [];
+  for (const fileName of await readdir(dir)) {
+    if (!BACKUP_FILE_NAME.test(fileName)) continue;
+    const info = await stat(join(dir, fileName));
+    if (info.isFile()) {
+      files.push({ fileName, size: info.size, modifiedAt: info.mtime });
+    }
+  }
+  return files.sort((a, b) => +b.modifiedAt - +a.modifiedAt);
+}
+
+/** Escribe el respaldo en `dir` (primero con extensión .partial). */
+export async function writeBackupFile(
+  backup: PreparedBackup,
+  dir: string,
+  prefix = '',
+): Promise<SavedBackup> {
+  await mkdir(dir, { recursive: true });
+  const fileName = `${prefix}${backup.fileName}`;
+  const path = join(dir, fileName);
+  const partial = `${path}.partial`;
+  try {
+    const manifest = await backup.writeTo(createWriteStream(partial));
+    await rename(partial, path);
+    return { fileName, path, size: (await stat(path)).size, manifest };
+  } catch (error) {
+    await backup.dispose();
+    await unlink(partial).catch(() => undefined);
+    throw error;
   }
 }
 

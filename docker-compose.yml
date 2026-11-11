@@ -104,6 +104,8 @@ services:
       S3_BUCKET: ${S3_BUCKET:-santa-rosa}
       S3_PRESIGNED_URL_TTL_SECONDS: ${S3_PRESIGNED_URL_TTL_SECONDS:-900}
       BACKUP_DIR: /app/backups
+      # Tamaño máximo de un respaldo subido para restaurarlo desde el sistema.
+      BACKUP_UPLOAD_MAX_MB: ${BACKUP_UPLOAD_MAX_MB:-2048}
     ports:
       - "${API_EXTERNAL_PORT:-3000}:3000"
     volumes:

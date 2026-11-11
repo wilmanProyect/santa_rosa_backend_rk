@@ -9,7 +9,9 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AnimalsModule } from './modules/animals/animals.module';
 import { VeterinaryModule } from './modules/veterinary/veterinary.module';
-import { BackupsModule } from './modules/backups/backups.module';
+import { BackupsHttpModule } from './modules/backups/backups-http.module';
+import { ReproductionModule } from './modules/reproduction/reproduction.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
@@ -20,7 +22,9 @@ import { buildDataSourceOptions } from './database/database.config';
     AuthModule,
     AnimalsModule,
     VeterinaryModule,
-    BackupsModule,
+    BackupsHttpModule,
+    ReproductionModule,
+    ReviewsModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,

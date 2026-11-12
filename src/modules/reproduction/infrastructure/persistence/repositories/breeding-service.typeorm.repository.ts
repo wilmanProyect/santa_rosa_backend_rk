@@ -11,6 +11,7 @@ import { OPEN_SERVICE_STATUSES } from '../../../domain/enums/reproduction.enums'
 import { BreedingServiceOrmEntity } from '../entities/breeding-service.orm-entity';
 import { PregnancyCheckOrmEntity } from '../entities/pregnancy-check.orm-entity';
 import { BreedingServiceMapper } from '../mappers/reproduction.mappers';
+import { UserOrmEntity } from '@modules/users/infrastructure/persistence/entities/user.orm-entity';
 
 @Injectable()
 export class BreedingServiceTypeormRepository implements IBreedingServiceRepository {
@@ -134,7 +135,13 @@ export class BreedingServiceTypeormRepository implements IBreedingServiceReposit
     return this.repository
       .createQueryBuilder('s')
       .innerJoinAndSelect('s.dam', 'dam')
-      .innerJoinAndSelect('s.sire', 'sire');
+      .innerJoinAndSelect('s.sire', 'sire')
+      .leftJoinAndMapOne(
+        's.creator',
+        UserOrmEntity,
+        'creator',
+        'creator.id = s.createdBy',
+      );
   }
 
   private async attachChecks(entities: BreedingServiceOrmEntity[]) {

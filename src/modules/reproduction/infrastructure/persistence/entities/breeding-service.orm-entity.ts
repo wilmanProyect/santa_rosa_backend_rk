@@ -16,6 +16,7 @@ import {
   Species,
 } from '@modules/animals/domain/enums/animal.enums';
 import { AnimalOrmEntity } from '@modules/animals/infrastructure/persistence/entities/animal.orm-entity';
+import type { UserOrmEntity } from '@modules/users/infrastructure/persistence/entities/user.orm-entity';
 import {
   ServiceStatus,
   ServiceType,
@@ -42,6 +43,10 @@ import { PregnancyCheckOrmEntity } from './pregnancy-check.orm-entity';
 @Check(
   'CHK_breeding_services_dates',
   `"expected_birth_date" > "service_date" AND ("abortion_date" IS NULL OR "abortion_date" >= "service_date")`,
+)
+@Check(
+  'CHK_breeding_services_exit',
+  `"exit_date" IS NULL OR "exit_date" >= "service_date"`,
 )
 @Check(
   'CHK_breeding_services_abortion',
@@ -71,25 +76,24 @@ export class BreedingServiceOrmEntity extends AuditableOrmEntity {
   @JoinColumn({ name: 'sire_id' })
   sire: AnimalOrmEntity;
 
+  /** Usuario de created_by; no es columna: lo carga el repositorio al leer. */
+  creator?: UserOrmEntity | null;
+
   @Column({ type: 'varchar', length: 10 })
   species: Species;
 
   @Column({ type: 'varchar', length: 30 })
   type: ServiceType;
 
+  /** Fecha de ingreso. */
   @Column({ name: 'service_date', type: 'date' })
   serviceDate: string;
 
+  @Column({ name: 'exit_date', type: 'date', nullable: true })
+  exitDate: string | null;
+
   @Column({ name: 'straw_code', type: 'varchar', length: 50, nullable: true })
   strawCode: string | null;
-
-  @Column({
-    name: 'performed_by',
-    type: 'varchar',
-    length: 150,
-    nullable: true,
-  })
-  performedBy: string | null;
 
   @Column({ name: 'expected_birth_date', type: 'date' })
   expectedBirthDate: string;

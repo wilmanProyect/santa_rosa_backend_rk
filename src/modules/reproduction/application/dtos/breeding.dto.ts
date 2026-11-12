@@ -19,6 +19,7 @@ import { BooleanQuery } from '@shared/application/transformers/boolean-query.tra
 import { Species } from '@modules/animals/domain/enums/animal.enums';
 import {
   MAX_LITTER_SIZE,
+  MAX_SERVICE_DAYS,
   PregnancyCheckMethod,
   PregnancyCheckResult,
   ServiceStatus,
@@ -70,9 +71,20 @@ export class CreateBreedingServiceDto {
   @IsEnum(ServiceType)
   type: ServiceType;
 
-  @ApiProperty({ example: '2026-11-11' })
+  @ApiProperty({
+    example: '2026-11-09',
+    description: 'Fecha de ingreso: el día en que se juntó la pareja',
+  })
   @IsDateString({ strict: true })
   serviceDate: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-11',
+    description: `Fecha de salida (la monta puede durar varios días; hasta ${MAX_SERVICE_DAYS} después del ingreso)`,
+  })
+  @IsDateString({ strict: true })
+  @IsOptional()
+  exitDate?: string;
 
   @ApiPropertyOptional({
     example: 'PAJ-2026-018',
@@ -82,15 +94,6 @@ export class CreateBreedingServiceDto {
   @MaxLength(50)
   @IsOptional()
   strawCode?: string;
-
-  @ApiPropertyOptional({
-    example: 'Juan Pérez',
-    description: 'Quién hizo la monta o la inseminación',
-  })
-  @IsString()
-  @MaxLength(150)
-  @IsOptional()
-  performedBy?: string;
 
   @ApiPropertyOptional()
   @IsString()
@@ -122,10 +125,23 @@ export class CreateBreedingServiceDto {
 
 /** La pareja y el tipo no cambian: si están mal, se elimina la monta y se registra otra. */
 export class UpdateBreedingServiceDto {
-  @ApiPropertyOptional({ example: '2026-11-10' })
+  @ApiPropertyOptional({
+    example: '2026-11-10',
+    description: 'Fecha de ingreso',
+  })
   @IsDateString({ strict: true })
   @IsOptional()
   serviceDate?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-12',
+    nullable: true,
+    description: 'Fecha de salida (null la borra)',
+  })
+  @ValidateIf(notNull)
+  @IsDateString({ strict: true })
+  @IsOptional()
+  exitDate?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @ValidateIf(notNull)
@@ -133,13 +149,6 @@ export class UpdateBreedingServiceDto {
   @MaxLength(50)
   @IsOptional()
   strawCode?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @ValidateIf(notNull)
-  @IsString()
-  @MaxLength(150)
-  @IsOptional()
-  performedBy?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @ValidateIf(notNull)

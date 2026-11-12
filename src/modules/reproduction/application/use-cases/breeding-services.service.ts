@@ -99,8 +99,8 @@ export class BreedingServicesService {
       sire: evaluation.sire,
       type: dto.type,
       serviceDate: dto.serviceDate,
+      exitDate: dto.exitDate ?? null,
       strawCode: dto.strawCode ?? null,
-      performedBy: dto.performedBy ?? null,
       notes: dto.notes ?? null,
       inbreedingCoefficient: evaluation.kinship.inbreedingCoefficient,
       kinshipOverride: override,
@@ -109,13 +109,15 @@ export class BreedingServicesService {
       now: new Date(),
     });
     await this.repository.save(service, actor.id);
+    // Se relee para devolver quién la registró.
+    const saved = (await this.repository.findById(service.getId())) ?? service;
     const warnings = [...evaluation.warnings];
     if (override) {
       warnings.unshift(
         `Monta autorizada pese al parentesco (${evaluation.kinship.relationship}).`,
       );
     }
-    return { service, warnings };
+    return { service: saved, warnings };
   }
 
   async update(

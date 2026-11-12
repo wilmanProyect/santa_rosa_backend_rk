@@ -54,6 +54,9 @@ export const GESTATION_DAYS: Record<Species, number> = {
 /** Fuera de este rango (días desde la monta) el parto se registra con un aviso. */
 export const BIRTH_WINDOW_DAYS = { min: 140, max: 160 };
 
+/** Días máximos entre el ingreso y la salida de una monta (suele durar 2 o 3). */
+export const MAX_SERVICE_DAYS = 30;
+
 /** Días después de la monta en que conviene hacer el diagnóstico de preñez. */
 export const PREGNANCY_CHECK_DAYS = { from: 30, to: 45 };
 

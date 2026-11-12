@@ -15,6 +15,7 @@ import {
 import {
   GESTATION_DAYS,
   MAX_LITTER_SIZE,
+  MAX_SERVICE_DAYS,
   PregnancyCheckMethod,
   PregnancyCheckResult,
   ServiceStatus,
@@ -32,6 +33,13 @@ export interface PregnancyCheck {
   fetusCount: number | null;
   notes: string | null;
   audit: AuditInfo;
+}
+
+/** Usuario que registró la monta en el sistema (se toma de la auditoría). */
+export interface ServiceRegistrar {
+  id: string;
+  username: string;
+  fullName: string;
 }
 
 /** Autorización de una monta entre animales emparentados. */
@@ -53,12 +61,12 @@ export interface BreedingServiceProps {
   sire: BreedingAnimalRef;
   species: Species;
   type: ServiceType;
-  /** YYYY-MM-DD */
+  /** Fecha de ingreso: el día en que se juntó la pareja (YYYY-MM-DD). */
   serviceDate: string;
+  /** Fecha de salida: la monta puede durar varios días (YYYY-MM-DD). */
+  exitDate: string | null;
   /** Código de la pajuela (inseminación artificial). */
   strawCode: string | null;
-  /** Quién hizo la monta o la inseminación. */
-  performedBy: string | null;
   expectedBirthDate: string;
   status: ServiceStatus;
   /** Coeficiente de consanguinidad que tendría la cría (0 a 1). */
@@ -70,6 +78,8 @@ export interface BreedingServiceProps {
   checks: PregnancyCheck[];
   notes: string | null;
   audit: AuditInfo;
+  /** Quién la registró. Solo lectura: lo llena el repositorio. */
+  registeredBy?: ServiceRegistrar | null;
 }
 
 /**
@@ -125,8 +135,8 @@ export class BreedingService {
     sire: Animal;
     type: ServiceType;
     serviceDate: string;
+    exitDate?: string | null;
     strawCode?: string | null;
-    performedBy?: string | null;
     notes?: string | null;
     inbreedingCoefficient: number;
     kinshipOverride: KinshipOverride | null;
@@ -149,8 +159,8 @@ export class BreedingService {
       species,
       type: params.type,
       serviceDate: params.serviceDate,
+      exitDate: null,
       strawCode: null,
-      performedBy: null,
       expectedBirthDate: addDays(params.serviceDate, GESTATION_DAYS[species]),
       status: ServiceStatus.PENDING,
       inbreedingCoefficient: params.inbreedingCoefficient,
@@ -162,6 +172,7 @@ export class BreedingService {
       audit: newAuditInfo(params.createdBy),
     });
     service.applyDetails(params);
+    service.applyExitDate(params.exitDate ?? null, params.now);
     return service;
   }
 
@@ -185,11 +196,14 @@ export class BreedingService {
   public getServiceDate(): string {
     return this.props.serviceDate;
   }
+  public getExitDate(): string | null {
+    return this.props.exitDate;
+  }
   public getStrawCode(): string | null {
     return this.props.strawCode;
   }
-  public getPerformedBy(): string | null {
-    return this.props.performedBy;
+  public getRegisteredBy(): ServiceRegistrar | null {
+    return this.props.registeredBy ?? null;
   }
   public getExpectedBirthDate(): string {
     return this.props.expectedBirthDate;
@@ -234,8 +248,8 @@ export class BreedingService {
   public update(
     changes: {
       serviceDate?: string;
+      exitDate?: string | null;
       strawCode?: string | null;
-      performedBy?: string | null;
       notes?: string | null;
     },
     dam: Animal,
@@ -268,6 +282,11 @@ export class BreedingService {
         GESTATION_DAYS[this.props.species],
       );
     }
+    // También valida la salida vigente contra una nueva fecha de ingreso.
+    this.applyExitDate(
+      changes.exitDate !== undefined ? changes.exitDate : this.props.exitDate,
+      now,
+    );
     this.applyDetails(changes);
   }
 
@@ -378,17 +397,32 @@ export class BreedingService {
     this.props.audit.updatedBy = actorId;
   }
 
+  private applyExitDate(exitDate: string | null, now: Date): void {
+    if (exitDate !== null) {
+      if (exitDate > toDateOnly(now)) {
+        throw new DomainError('La fecha de salida no puede ser futura');
+      }
+      if (exitDate < this.props.serviceDate) {
+        throw new DomainError(
+          `La fecha de salida no puede ser anterior a la de ingreso (${this.props.serviceDate})`,
+        );
+      }
+      if (exitDate > addDays(this.props.serviceDate, MAX_SERVICE_DAYS)) {
+        throw new DomainError(
+          `La monta no puede durar más de ${MAX_SERVICE_DAYS} días: revise la fecha de salida`,
+        );
+      }
+    }
+    this.props.exitDate = exitDate;
+  }
+
   private applyDetails(changes: {
     strawCode?: string | null;
-    performedBy?: string | null;
     notes?: string | null;
   }): void {
     const p = this.props;
     if (changes.strawCode !== undefined) {
       p.strawCode = changes.strawCode?.trim().toUpperCase() || null;
-    }
-    if (changes.performedBy !== undefined) {
-      p.performedBy = changes.performedBy?.trim() || null;
     }
     if (changes.notes !== undefined) p.notes = changes.notes?.trim() || null;
     if (p.strawCode && p.type !== ServiceType.ARTIFICIAL_INSEMINATION) {

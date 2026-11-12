@@ -39,8 +39,8 @@ export class BreedingServiceMapper {
       species: e.species,
       type: e.type,
       serviceDate: e.serviceDate,
+      exitDate: e.exitDate,
       strawCode: e.strawCode,
-      performedBy: e.performedBy,
       expectedBirthDate: e.expectedBirthDate,
       status: e.status,
       inbreedingCoefficient: e.inbreedingCoefficient,
@@ -70,6 +70,19 @@ export class BreedingServiceMapper {
         })),
       notes: e.notes,
       audit: audit(e),
+      registeredBy: e.creator
+        ? {
+            id: e.creator.id,
+            username: e.creator.username,
+            fullName: [
+              e.creator.firstName,
+              e.creator.paternalLastName,
+              e.creator.maternalLastName,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          }
+        : null,
     });
   }
 
@@ -84,8 +97,8 @@ export class BreedingServiceMapper {
     e.species = s.getSpecies();
     e.type = s.getType();
     e.serviceDate = s.getServiceDate();
+    e.exitDate = s.getExitDate();
     e.strawCode = s.getStrawCode();
-    e.performedBy = s.getPerformedBy();
     e.expectedBirthDate = s.getExpectedBirthDate();
     e.status = s.getStatus();
     e.inbreedingCoefficient = s.getInbreedingCoefficient();

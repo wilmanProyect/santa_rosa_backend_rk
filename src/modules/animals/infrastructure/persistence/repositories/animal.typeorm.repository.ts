@@ -19,6 +19,7 @@ import { GeneticCategoryChange } from '../../../domain/models/genetic-category-c
 import { GeneticCategoryChangeOrmEntity } from '../entities/genetic-category-change.orm-entity';
 import { GeneticCategoryChangeMapper } from '../mappers/genetic-category-change.mapper';
 import { Species } from '../../../domain/enums/animal.enums';
+import { syncDamDeath } from '@modules/reproduction/infrastructure/persistence/dam-death.sync';
 
 @Injectable()
 export class AnimalTypeormRepository implements IAnimalRepository {
@@ -112,7 +113,8 @@ export class AnimalTypeormRepository implements IAnimalRepository {
     options: SaveAnimalOptions = {},
   ): Promise<void> {
     const sync = options.syncHistoricalBirth;
-    if (!categoryChange && !sync) {
+    const damDeath = options.syncDamDeath;
+    if (!categoryChange && !sync && !damDeath) {
       await this.repository.save(AnimalMapper.toOrm(animal));
       return;
     }
@@ -123,6 +125,9 @@ export class AnimalTypeormRepository implements IAnimalRepository {
       }
       if (sync) {
         await syncHistoricalBirth(manager, animal.getId(), sync.actorId);
+      }
+      if (damDeath) {
+        await syncDamDeath(manager, animal.getId(), damDeath.actorId);
       }
     });
   }

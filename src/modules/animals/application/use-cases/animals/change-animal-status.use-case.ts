@@ -93,7 +93,11 @@ export class ChangeAnimalStatusUseCase {
     );
 
     animal.markUpdatedBy(actor.id);
-    await this.animalRepository.save(animal);
+    // Si es una hembra que muere con una monta abierta, la monta se cierra
+    // como "madre muerta" en la misma transacción (y se reabre si se corrige).
+    await this.animalRepository.save(animal, undefined, {
+      syncDamDeath: { actorId: actor.id },
+    });
     return { animal, warnings };
   }
 }

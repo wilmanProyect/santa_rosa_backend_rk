@@ -159,6 +159,7 @@ import { AnimalController } from './infrastructure/controllers/animal.controller
     ANIMAL_REPOSITORY,
     ANIMAL_WEIGHING_REPOSITORY,
     GetAnimalUseCase,
+    ChangeAnimalStatusUseCase,
     GetBreedUseCase,
     GetAnimalColorUseCase,
     AnimalIdentifierService,

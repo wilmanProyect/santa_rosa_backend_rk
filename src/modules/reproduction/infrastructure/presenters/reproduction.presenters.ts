@@ -57,6 +57,7 @@ export class BreedingServicePresenter {
           }
         : null,
       abortion: s.getAbortion(),
+      damDeath: s.getDamDeath(),
       checks: s.getChecks().map((c) => PregnancyCheckPresenter.toResponse(c)),
       notes: s.getNotes(),
       createdAt: audit.createdAt,

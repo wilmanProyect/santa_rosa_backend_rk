@@ -84,7 +84,7 @@ export interface SireStats {
   services: number;
   /** Montas con resultado conocido (no pendientes). */
   servicesWithResult: number;
-  /** Montas que terminaron en preñez, parto o aborto. */
+  /** Montas que terminaron en preñez, parto, aborto o madre muerta preñada. */
   conceptions: number;
   births: number;
   offspring: number;
@@ -96,9 +96,22 @@ export interface ReproductionStats {
     total: number;
     byStatus: Record<ServiceStatus, number>;
     byType: Record<ServiceType, number>;
+    /**
+     * Montas con resultado conocido. No cuenta las pendientes ni las de una
+     * madre que murió antes de saber si estaba preñada.
+     */
     withResult: number;
+    /** Preñez, parto, aborto o madre muerta con preñez confirmada. */
     conceptions: number;
     kinshipOverrides: number;
+    /** Madres muertas durante la gestación. */
+    damDeaths: {
+      total: number;
+      /** Con el último diagnóstico "preñada". */
+      confirmedPregnant: number;
+      /** Fetos perdidos según las ecografías. */
+      lostFetuses: number;
+    };
   };
   births: {
     total: number;

@@ -109,7 +109,7 @@ export class ReproductionReportsService {
       filters,
       ...stats,
       indicators: {
-        /** Preñadas (o paridas/abortadas) sobre montas con resultado, en %. */
+        /** Preñadas (o paridas/abortadas/muertas preñadas) sobre montas con resultado, en %. */
         fertilityRate: rate(services.conceptions, services.withResult),
         /** Crías por parto. */
         prolificacy: births.total

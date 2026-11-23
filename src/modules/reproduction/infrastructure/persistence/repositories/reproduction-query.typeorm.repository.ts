@@ -76,9 +76,13 @@ export class ReproductionQueryTypeormRepository implements IReproductionQueryRep
       type: ServiceType;
       total: string;
       overrides: string;
+      died_pregnant: string;
+      lost_fetuses: string;
     }[] = await this.db.query(
       `SELECT status, type, COUNT(*) AS total,
-              COUNT(*) FILTER (WHERE kinship_override_by IS NOT NULL) AS overrides
+              COUNT(*) FILTER (WHERE kinship_override_by IS NOT NULL) AS overrides,
+              COUNT(*) FILTER (WHERE dam_death_confirmed_pregnancy) AS died_pregnant,
+              COALESCE(SUM(dam_death_lost_fetuses), 0) AS lost_fetuses
          FROM breeding_services s
         WHERE deleted_at IS NULL AND ${period('s', 'service_date')}
         GROUP BY status, type`,
@@ -91,11 +95,16 @@ export class ReproductionQueryTypeormRepository implements IReproductionQueryRep
       Object.values(ServiceType).map((t) => [t, 0]),
     ) as Record<ServiceType, number>;
     let overrides = 0;
+    let diedPregnant = 0;
+    let lostFetuses = 0;
     for (const r of serviceRows) {
       byStatus[r.status] += Number(r.total);
       byType[r.type] += Number(r.total);
       overrides += Number(r.overrides);
+      diedPregnant += Number(r.died_pregnant);
+      lostFetuses += Number(r.lost_fetuses);
     }
+    const damDeaths = byStatus[ServiceStatus.DAM_DIED];
     const totalServices = Object.values(byStatus).reduce((a, b) => a + b, 0);
 
     const birthRows: {
@@ -146,12 +155,22 @@ export class ReproductionQueryTypeormRepository implements IReproductionQueryRep
         total: totalServices,
         byStatus,
         byType,
-        withResult: totalServices - byStatus[ServiceStatus.PENDING],
+        // Una madre que murió sin diagnóstico no dice si la monta funcionó.
+        withResult:
+          totalServices -
+          byStatus[ServiceStatus.PENDING] -
+          (damDeaths - diedPregnant),
         conceptions:
           byStatus[ServiceStatus.PREGNANT] +
           byStatus[ServiceStatus.BIRTHED] +
-          byStatus[ServiceStatus.ABORTED],
+          byStatus[ServiceStatus.ABORTED] +
+          diedPregnant,
         kinshipOverrides: overrides,
+        damDeaths: {
+          total: damDeaths,
+          confirmedPregnant: diedPregnant,
+          lostFetuses,
+        },
       },
       births: {
         total: birthRows.length,
@@ -184,8 +203,10 @@ export class ReproductionQueryTypeormRepository implements IReproductionQueryRep
       `WITH s AS (
          SELECT sire_id,
                 COUNT(*) AS services,
-                COUNT(*) FILTER (WHERE status <> 'PENDING') AS with_result,
-                COUNT(*) FILTER (WHERE status IN ('PREGNANT', 'BIRTHED', 'ABORTED')) AS conceptions
+                COUNT(*) FILTER (WHERE status <> 'PENDING'
+                  AND NOT (status = 'DAM_DIED' AND NOT dam_death_confirmed_pregnancy)) AS with_result,
+                COUNT(*) FILTER (WHERE status IN ('PREGNANT', 'BIRTHED', 'ABORTED')
+                  OR dam_death_confirmed_pregnancy) AS conceptions
            FROM breeding_services s
           WHERE deleted_at IS NULL AND ${period('s', 'service_date')}
           GROUP BY sire_id

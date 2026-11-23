@@ -56,6 +56,11 @@ export interface SaveAnimalOptions {
    * afectados. Se usa al corregir la madre, el padre o la fecha de nacimiento.
    */
   syncHistoricalBirth?: { actorId: string };
+  /**
+   * Cierra la monta abierta de la hembra si pasó a muerta (DAM_DIED) o la
+   * reabre si dejó de estarlo. Se usa en cada cambio de estado del inventario.
+   */
+  syncDamDeath?: { actorId: string };
 }
 
 export interface IAnimalRepository {

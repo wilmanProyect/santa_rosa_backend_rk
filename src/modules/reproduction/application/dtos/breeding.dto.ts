@@ -245,6 +245,25 @@ export class CreatePregnancyCheckDto {
   notes?: string;
 }
 
+export class RecordDamDeathDto {
+  @ApiProperty({
+    example: '2027-01-20',
+    description:
+      'Fecha de la muerte. Es también la fecha de salida de la hembra en el inventario.',
+  })
+  @IsDateString({ strict: true })
+  date: string;
+
+  @ApiPropertyOptional({
+    example: 'Toxemia de la preñez',
+    description: 'Causa de la muerte (queda como motivo en el inventario)',
+  })
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  cause?: string;
+}
+
 export class RecordAbortionDto {
   @ApiProperty({ example: '2027-01-15' })
   @IsDateString({ strict: true })

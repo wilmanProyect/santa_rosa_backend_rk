@@ -20,6 +20,11 @@ export enum ServiceStatus {
   BIRTHED = 'BIRTHED',
   /** Abortó. */
   ABORTED = 'ABORTED',
+  /**
+   * La madre murió durante la gestación (o antes del diagnóstico). La hembra
+   * pasa a DEAD en el inventario en la misma operación.
+   */
+  DAM_DIED = 'DAM_DIED',
 }
 
 /** Estados en los que la hembra no puede recibir otra monta. */

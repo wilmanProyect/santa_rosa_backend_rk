@@ -2,7 +2,12 @@ import { DomainError } from '@shared/domain/errors/domain.error';
 import { Animal } from '@modules/animals/domain/models/animal.model';
 import { Breed } from '@modules/animals/domain/models/breed.model';
 import { Sex, Species } from '@modules/animals/domain/enums/animal.enums';
-import { ServiceType } from '../enums/reproduction.enums';
+import {
+  PregnancyCheckMethod,
+  PregnancyCheckResult,
+  ServiceStatus,
+  ServiceType,
+} from '../enums/reproduction.enums';
 import { BreedingService } from './breeding-service.model';
 
 const NOW = new Date('2026-11-12T12:00:00Z');
@@ -67,5 +72,96 @@ describe('BreedingService: fecha de salida', () => {
     expect(s.getExitDate()).toBe('2026-09-07');
     s.update({ exitDate: null }, dam, sire, NOW);
     expect(s.getExitDate()).toBeNull();
+  });
+});
+
+describe('BreedingService: muerte de la madre durante la gestación', () => {
+  const pregnantOn = (s: BreedingService, date: string, fetusCount?: number) =>
+    s.addCheck(
+      {
+        checkedAt: date,
+        method: PregnancyCheckMethod.ULTRASOUND,
+        result: PregnancyCheckResult.PREGNANT,
+        fetusCount,
+      },
+      'u1',
+      NOW,
+    );
+
+  it('cierra la monta preñada y guarda los fetos de la última ecografía', () => {
+    const s = service('2026-08-01');
+    pregnantOn(s, '2026-09-10', 2);
+    s.recordDamDeath({ date: '2026-10-05', cause: ' Toxemia ' }, NOW);
+    expect(s.getStatus()).toBe(ServiceStatus.DAM_DIED);
+    expect(s.getDamDeath()).toEqual({
+      date: '2026-10-05',
+      cause: 'Toxemia',
+      confirmedPregnancy: true,
+      lostFetuses: 2,
+    });
+  });
+
+  it('se puede registrar antes del diagnóstico, sin preñez confirmada', () => {
+    const s = service('2026-10-01');
+    s.recordDamDeath({ date: '2026-10-20', cause: null }, NOW);
+    expect(s.getDamDeath()).toMatchObject({
+      confirmedPregnancy: false,
+      lostFetuses: null,
+    });
+  });
+
+  it('la monta cerrada no admite diagnóstico, aborto ni parto', () => {
+    const s = service('2026-08-01');
+    s.recordDamDeath({ date: '2026-10-05', cause: null }, NOW);
+    expect(() => pregnantOn(s, '2026-10-06')).toThrow(/murió/);
+    expect(() =>
+      s.recordAbortion({ date: '2026-10-06', cause: null }, NOW),
+    ).toThrow(DomainError);
+    expect(() => s.markBirthed('2026-11-01')).toThrow(/murió/);
+  });
+
+  it('valida la fecha contra la monta y el último diagnóstico', () => {
+    const s = service('2026-08-01');
+    pregnantOn(s, '2026-09-10');
+    expect(() =>
+      s.recordDamDeath({ date: '2026-07-30', cause: null }, NOW),
+    ).toThrow(/anterior a la monta/);
+    expect(() =>
+      s.recordDamDeath({ date: '2026-09-01', cause: null }, NOW),
+    ).toThrow(/último diagnóstico/);
+    expect(() =>
+      s.recordDamDeath({ date: '2026-11-20', cause: null }, NOW),
+    ).toThrow(/futura/);
+  });
+
+  it('no aplica a una monta vacía, parida o abortada', () => {
+    const empty = service('2026-08-01');
+    empty.addCheck(
+      {
+        checkedAt: '2026-09-10',
+        method: PregnancyCheckMethod.ULTRASOUND,
+        result: PregnancyCheckResult.EMPTY,
+      },
+      'u1',
+      NOW,
+    );
+    expect(() =>
+      empty.recordDamDeath({ date: '2026-10-01', cause: null }, NOW),
+    ).toThrow(/vacía/);
+    const aborted = service('2026-08-01');
+    aborted.recordAbortion({ date: '2026-09-20', cause: null }, NOW);
+    expect(() =>
+      aborted.recordDamDeath({ date: '2026-10-01', cause: null }, NOW),
+    ).toThrow(/aborto/);
+  });
+
+  it('al anularla, la monta vuelve al estado de su último diagnóstico', () => {
+    const s = service('2026-08-01');
+    pregnantOn(s, '2026-09-10');
+    s.recordDamDeath({ date: '2026-10-05', cause: null }, NOW);
+    s.cancelDamDeath();
+    expect(s.getStatus()).toBe(ServiceStatus.PREGNANT);
+    expect(s.getDamDeath()).toBeNull();
+    expect(() => s.cancelDamDeath()).toThrow(DomainError);
   });
 });

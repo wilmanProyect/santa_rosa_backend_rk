@@ -55,6 +55,17 @@ export interface Abortion {
   cause: string | null;
 }
 
+/** Muerte de la madre durante la gestación. */
+export interface DamDeath {
+  /** YYYY-MM-DD. Es la fecha de muerte del inventario. */
+  date: string;
+  cause: string | null;
+  /** El último diagnóstico antes de morir era "preñada". */
+  confirmedPregnancy: boolean;
+  /** Fetos perdidos según la última ecografía (null si no se contaron). */
+  lostFetuses: number | null;
+}
+
 export interface BreedingServiceProps {
   id: string;
   dam: BreedingAnimalRef;
@@ -75,6 +86,7 @@ export interface BreedingServiceProps {
   /** Categoría que tendría la cría, calculada al registrar la monta. */
   expectedOffspringCategory: GeneticCategory | null;
   abortion: Abortion | null;
+  damDeath: DamDeath | null;
   checks: PregnancyCheck[];
   notes: string | null;
   audit: AuditInfo;
@@ -167,6 +179,7 @@ export class BreedingService {
       kinshipOverride: params.kinshipOverride,
       expectedOffspringCategory: params.expectedOffspringCategory,
       abortion: null,
+      damDeath: null,
       checks: [],
       notes: null,
       audit: newAuditInfo(params.createdBy),
@@ -222,6 +235,9 @@ export class BreedingService {
   }
   public getAbortion(): Abortion | null {
     return this.props.abortion;
+  }
+  public getDamDeath(): DamDeath | null {
+    return this.props.damDeath;
   }
   /** Del más antiguo al más reciente. */
   public getChecks(): PregnancyCheck[] {
@@ -352,6 +368,11 @@ export class BreedingService {
     if (this.props.abortion) {
       throw new DomainError('La monta ya tiene un aborto registrado');
     }
+    if (this.props.damDeath) {
+      throw new DomainError(
+        'La monta tiene registrada la muerte de la madre: no admite un aborto',
+      );
+    }
     assertDate(abortion.date, this.props.serviceDate, 'del aborto', now);
     const last = this.props.checks.at(-1);
     if (last && last.checkedAt > abortion.date) {
@@ -375,6 +396,63 @@ export class BreedingService {
     this.refreshStatus();
   }
 
+  /**
+   * La madre murió durante la gestación (o antes del diagnóstico). Solo en una
+   * monta abierta: si ya parió, abortó o quedó vacía, la muerte no la afecta y
+   * se registra solo en el inventario.
+   */
+  public recordDamDeath(
+    death: { date: string; cause: string | null },
+    now: Date,
+  ): void {
+    if (this.props.damDeath) {
+      throw new DomainError(
+        'La monta ya tiene registrada la muerte de la madre',
+      );
+    }
+    if (this.props.status === ServiceStatus.BIRTHED) {
+      throw new DomainError(
+        'La monta ya tiene un parto registrado: la muerte de la hembra se registra en el inventario',
+      );
+    }
+    if (this.props.abortion) {
+      throw new DomainError(
+        'La monta tiene un aborto registrado: la muerte de la hembra se registra en el inventario',
+      );
+    }
+    if (this.props.status === ServiceStatus.EMPTY) {
+      throw new DomainError(
+        'El último diagnóstico de la monta es "vacía": la hembra no estaba gestando. Registre la muerte en el inventario.',
+      );
+    }
+    assertDate(death.date, this.props.serviceDate, 'de la muerte', now);
+    const last = this.props.checks.at(-1);
+    if (last && last.checkedAt > death.date) {
+      throw new DomainError(
+        `La fecha de la muerte no puede ser anterior al último diagnóstico de la monta (${last.checkedAt})`,
+      );
+    }
+    const pregnant = last?.result === PregnancyCheckResult.PREGNANT;
+    this.props.damDeath = {
+      date: death.date,
+      cause: death.cause?.trim() || null,
+      confirmedPregnancy: pregnant,
+      lostFetuses: pregnant ? last.fetusCount : null,
+    };
+    this.refreshStatus();
+  }
+
+  /** Corrige una muerte registrada por error: la monta vuelve a su estado. */
+  public cancelDamDeath(): void {
+    if (!this.props.damDeath) {
+      throw new DomainError(
+        'La monta no tiene registrada la muerte de la madre',
+      );
+    }
+    this.props.damDeath = null;
+    this.refreshStatus();
+  }
+
   /** Lo llama el registro del parto. */
   public markBirthed(birthDate: string): void {
     if (this.props.status === ServiceStatus.BIRTHED) {
@@ -383,6 +461,11 @@ export class BreedingService {
     if (this.props.abortion) {
       throw new DomainError(
         'La monta tiene un aborto registrado: anúlelo antes de registrar el parto',
+      );
+    }
+    if (this.props.damDeath) {
+      throw new DomainError(
+        'La madre murió durante la gestación: la monta no admite un parto',
       );
     }
     if (birthDate < this.props.serviceDate) {
@@ -443,6 +526,11 @@ export class BreedingService {
         `No se puede ${action}: la monta tiene un aborto registrado`,
       );
     }
+    if (this.props.damDeath) {
+      throw new DomainError(
+        `No se puede ${action}: la madre murió durante la gestación`,
+      );
+    }
   }
 
   private refreshStatus(): void {
@@ -450,6 +538,10 @@ export class BreedingService {
     if (p.status === ServiceStatus.BIRTHED) return;
     if (p.abortion) {
       p.status = ServiceStatus.ABORTED;
+      return;
+    }
+    if (p.damDeath) {
+      p.status = ServiceStatus.DAM_DIED;
       return;
     }
     const last = p.checks.at(-1);

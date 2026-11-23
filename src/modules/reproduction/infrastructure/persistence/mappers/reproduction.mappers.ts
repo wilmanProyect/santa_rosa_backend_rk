@@ -56,6 +56,14 @@ export class BreedingServiceMapper {
       abortion: e.abortionDate
         ? { date: e.abortionDate, cause: e.abortionCause }
         : null,
+      damDeath: e.damDeathDate
+        ? {
+            date: e.damDeathDate,
+            cause: e.damDeathCause,
+            confirmedPregnancy: e.damDeathConfirmedPregnancy,
+            lostFetuses: e.damDeathLostFetuses,
+          }
+        : null,
       checks: (e.checks ?? [])
         .filter((c) => !c.deletedAt)
         .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt))
@@ -108,6 +116,11 @@ export class BreedingServiceMapper {
     e.expectedOffspringCategory = s.getExpectedOffspringCategory();
     e.abortionDate = abortion?.date ?? null;
     e.abortionCause = abortion?.cause ?? null;
+    const death = s.getDamDeath();
+    e.damDeathDate = death?.date ?? null;
+    e.damDeathCause = death?.cause ?? null;
+    e.damDeathConfirmedPregnancy = death?.confirmedPregnancy ?? false;
+    e.damDeathLostFetuses = death?.lostFetuses ?? null;
     e.notes = s.getNotes();
     e.createdBy = a.createdBy;
     e.updatedBy = a.updatedBy;

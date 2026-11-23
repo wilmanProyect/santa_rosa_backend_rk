@@ -94,6 +94,8 @@ pnpm backup         # genera backups/santa-rosa-respaldo-AAAAMMDD-HHMMSS.tar.gz
 pnpm backup:list    # lista los respaldos de ./backups
 ```
 
+En el servidor, [scripts/backup-drive.sh](scripts/backup-drive.sh) genera una copia **cada semana** y la sube a Google Drive. La configuración está en [docs/DEPLOY.md](docs/DEPLOY.md#copia-semanal-en-google-drive).
+
 Los respaldos quedan en la carpeta `./backups` del servidor, montada en el contenedor de la API. Esa carpeta no se versiona ni entra en la imagen. **Copie los respaldos a otro lugar** (disco externo, nube): si se pierde el servidor, se pierden con él.
 
 ### Restaurar

@@ -26,6 +26,7 @@ import {
   CreatePregnancyCheckDto,
   ListBreedingServicesQueryDto,
   RecordAbortionDto,
+  RecordDamDeathDto,
   UpdateBreedingServiceDto,
 } from '../../application/dtos/breeding.dto';
 import {
@@ -185,6 +186,43 @@ export class BreedingController {
   ) {
     return BreedingServicePresenter.toResponse(
       await this.services.cancelAbortion(actor.id, id),
+    );
+  }
+
+  @Post('breeding/services/:id/dam-death')
+  @RequirePermissions(
+    PERMISSIONS.REPRODUCTION_WRITE,
+    PERMISSIONS.ANIMALS_CHANGE_STATUS,
+  )
+  @ApiOperation({
+    summary:
+      'Registrar la muerte de la madre durante la gestación (la monta pasa a DAM_DIED y la hembra a DEAD en el inventario)',
+  })
+  async recordDamDeath(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordDamDeathDto,
+  ) {
+    return BreedingServicePresenter.toResponse(
+      await this.services.recordDamDeath(actor, id, dto),
+    );
+  }
+
+  @Delete('breeding/services/:id/dam-death')
+  @RequirePermissions(
+    PERMISSIONS.REPRODUCTION_WRITE,
+    PERMISSIONS.ANIMALS_CHANGE_STATUS,
+  )
+  @ApiOperation({
+    summary:
+      'Anular la muerte de la madre registrada por error (la hembra vuelve a ALIVE y la monta a su estado anterior)',
+  })
+  async cancelDamDeath(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return BreedingServicePresenter.toResponse(
+      await this.services.cancelDamDeath(actor, id),
     );
   }
 

@@ -295,12 +295,118 @@ Siempre ejecute `docker compose` **dentro de la carpeta del proyecto**. Así sol
 | La API se reinicia en bucle | `docker compose logs api`: casi siempre falta una variable en `.env` o la base no arrancó |
 | `git pull` rechaza por cambios locales | `git stash && git pull && git stash pop` |
 
-## Copias de seguridad en el servidor
+## Copia semanal en Google Drive
 
-Respaldo diario a las 02:00 con `crontab -e`:
+Cada domingo a las 02:00 (hora de Bolivia), el script [scripts/backup-drive.sh](../scripts/backup-drive.sh):
 
-```cron
-0 2 * * * cd /opt/santa-rosa/santa_rosa_backend && docker compose exec -T api node dist/modules/backups/cli/backup.cli.js backup >> backups/cron.log 2>&1
+1. Genera un respaldo completo: base de datos, fotos y certificados.
+2. Lo sube a la carpeta `santa-rosa-respaldos` de Google Drive y verifica que llegó completo (compara el MD5).
+3. Borra de Drive los respaldos de más de **90 días** (unas 13 semanas) y deja en el VPS solo los **4** más recientes.
+
+Todo queda anotado en `backups/drive.log`. La subida usa [rclone](https://rclone.org) con el permiso `drive.file`: rclone solo ve los archivos que él mismo creó, no el resto de su Drive.
+
+Esto complementa la copia semanal de Hostinger: aquella guarda el VPS entero, pero queda en Hostinger. Esta guarda los datos de Santa Rosa fuera del proveedor.
+
+### 1. Instalar rclone en el VPS
+
+```bash
+sudo apt update && sudo apt install -y rclone
+rclone version
 ```
 
-Los respaldos quedan en `/opt/santa-rosa/santa_rosa_backend/backups`. Cópielos fuera del VPS con regularidad (por ejemplo con `scp` hacia su equipo). Guarde también una copia del `.env`: sin él no se puede levantar el sistema en otro servidor.
+### 2. Conectar con Google Drive
+
+El VPS no tiene navegador, así que la autorización se hace en dos partes: la configuración en el VPS y el inicio de sesión de Google en su PC.
+
+**En su PC (Windows):** descargue rclone de <https://rclone.org/downloads/> (*Windows, Intel/AMD 64 bit*) y descomprímalo, por ejemplo en `C:\rclone`. No hace falta instalarlo.
+
+**En el VPS** (como root, porque el script corre como root):
+
+```bash
+sudo rclone config
+```
+
+Responda así:
+
+| Pregunta | Respuesta |
+| --- | --- |
+| `n/s/q>` | `n` (nuevo remoto) |
+| `name>` | `drive` |
+| `Storage>` | `drive` (Google Drive) |
+| `client_id>` y `client_secret>` | Enter (vacíos) |
+| `scope>` | el número de **`drive.file`** |
+| `service_account_file>` | Enter |
+| `Edit advanced config?` | `n` |
+| `Use web browser to automatically authenticate?` | **`n`** |
+
+rclone muestra un comando como `rclone authorize "drive" "eyJ..."`. **Cópielo completo** y ejecútelo en PowerShell en su PC:
+
+```powershell
+cd C:\rclone
+.\rclone.exe authorize "drive" "eyJ..."
+```
+
+Se abre el navegador: inicie sesión con la cuenta de Google donde quiere guardar los respaldos y acepte. En la PowerShell aparece un bloque `{"access_token": ...}`: cópielo y péguelo en el VPS, en `config_token>`.
+
+Termine con `Configure this as a Shared Drive?` → `n`, `y` para guardar y `q` para salir.
+
+Verifique la conexión:
+
+```bash
+sudo rclone mkdir drive:santa-rosa-respaldos
+sudo rclone lsd drive:     # debe aparecer santa-rosa-respaldos
+```
+
+### 3. Probar el script
+
+```bash
+cd /opt/santa-rosa/santa_rosa_backend
+sudo ./scripts/backup-drive.sh && echo OK
+tail -n 8 backups/drive.log
+sudo rclone ls drive:santa-rosa-respaldos
+```
+
+En `drive.log` debe aparecer `Subido y verificado: santa-rosa-respaldo-...` y `Listo.`, y el archivo debe verse en Drive.
+
+### 4. Programarlo cada semana
+
+Revise la zona horaria del VPS:
+
+```bash
+timedatectl | grep "Time zone"
+```
+
+Abra el cron de root con `sudo crontab -e` y agregue **una** de estas líneas:
+
+```cron
+# VPS en UTC: domingo 06:00 UTC = 02:00 en Bolivia
+0 6 * * 0 /opt/santa-rosa/santa_rosa_backend/scripts/backup-drive.sh
+
+# VPS en America/La_Paz
+0 2 * * 0 /opt/santa-rosa/santa_rosa_backend/scripts/backup-drive.sh
+```
+
+Para cambiar el destino o la retención, agregue las variables antes del comando, por ejemplo `BACKUP_DRIVE_KEEP_DAYS=180 BACKUP_KEEP_LOCAL=2 /opt/...`.
+
+### Revisar que funciona
+
+- **Cada tanto:** `tail -n 20 /opt/santa-rosa/santa_rosa_backend/backups/drive.log`, o entre a la carpeta `santa-rosa-respaldos` en Drive y mire la fecha del último archivo.
+- **Si aparece `ERROR`:**
+  - `failed to get token` o `invalid_grant`: la autorización de Google venció o se revocó. Repita el paso 2 con `sudo rclone config reconnect drive:`.
+  - `quota` o `storageQuotaExceeded`: el Drive está lleno. Libere espacio o baje `BACKUP_DRIVE_KEEP_DAYS`.
+  - Error al generar el respaldo: revise `docker compose ps` y `docker compose logs --tail 50 api`.
+
+### Restaurar desde Drive
+
+```bash
+cd /opt/santa-rosa/santa_rosa_backend
+sudo rclone ls drive:santa-rosa-respaldos                       # elija el archivo
+sudo rclone copy drive:santa-rosa-respaldos/santa-rosa-respaldo-AAAAMMDD-HHMMSS.tar.gz backups/
+sudo chown 1000:1000 backups/santa-rosa-respaldo-AAAAMMDD-HHMMSS.tar.gz
+docker compose run --rm api node dist/modules/backups/cli/backup.cli.js restore santa-rosa-respaldo-AAAAMMDD-HHMMSS.tar.gz
+docker compose restart api
+```
+
+### El archivo `.env`
+
+El respaldo **no incluye** el `.env`, porque tiene las contraseñas y claves del servidor. Guarde una copia aparte en un gestor de contraseñas: sin él no se puede levantar el sistema en otro VPS.

@@ -9,6 +9,8 @@ import {
 import { Paginated } from '@shared/domain/paginated';
 import { PERMISSIONS } from '@modules/roles-permissions/domain/permission-catalog';
 import { GetAnimalUseCase } from '@modules/animals/application/use-cases/animals/get-animal.use-case';
+import { ChangeAnimalStatusUseCase } from '@modules/animals/application/use-cases/animals/change-animal-status.use-case';
+import { AnimalStatus } from '@modules/animals/domain/enums/animal.enums';
 import { BREEDING_SERVICE_REPOSITORY } from '../../domain/repositories/reproduction.repository.interface';
 import type { IBreedingServiceRepository } from '../../domain/repositories/reproduction.repository.interface';
 import {
@@ -26,6 +28,7 @@ import {
   CreatePregnancyCheckDto,
   ListBreedingServicesQueryDto,
   RecordAbortionDto,
+  RecordDamDeathDto,
   UpdateBreedingServiceDto,
 } from '../dtos/breeding.dto';
 import {
@@ -53,6 +56,7 @@ export class BreedingServicesService {
     private readonly repository: IBreedingServiceRepository,
     private readonly evaluation: BreedingEvaluationService,
     private readonly getAnimal: GetAnimalUseCase,
+    private readonly changeAnimalStatus: ChangeAnimalStatusUseCase,
   ) {}
 
   async get(id: string): Promise<BreedingService> {
@@ -183,6 +187,47 @@ export class BreedingServicesService {
     service.markUpdatedBy(actorId);
     await this.repository.save(service, actorId);
     return service;
+  }
+
+  /**
+   * La madre murió durante la gestación. La hembra pasa a "Muerto" en el
+   * inventario y, en la misma transacción, la monta se cierra como DAM_DIED
+   * (lo hace el guardado del animal: ver syncDamDeath).
+   */
+  async recordDamDeath(
+    actor: Actor,
+    id: string,
+    dto: RecordDamDeathDto,
+  ): Promise<BreedingService> {
+    const service = await this.get(id);
+    // Se valida primero contra la monta, para no tocar el inventario si no
+    // corresponde y devolver el mensaje de la monta.
+    service.recordDamDeath(
+      { date: dto.date, cause: dto.cause ?? null },
+      new Date(),
+    );
+    await this.changeAnimalStatus.execute(actor, service.getDam().id, {
+      status: AnimalStatus.DEAD,
+      date: dto.date,
+      reason: dto.cause,
+    });
+    return this.get(id);
+  }
+
+  /** Anula una muerte registrada por error: la hembra vuelve a estar viva. */
+  async cancelDamDeath(actor: Actor, id: string): Promise<BreedingService> {
+    const service = await this.get(id);
+    service.cancelDamDeath();
+    const dam = await this.getAnimal.execute(service.getDam().id);
+    if (dam.getStatus() !== AnimalStatus.DEAD) {
+      throw new ConflictException(
+        'La hembra ya no figura como muerta en el inventario: revise su estado',
+      );
+    }
+    await this.changeAnimalStatus.execute(actor, dam.getId(), {
+      status: AnimalStatus.ALIVE,
+    });
+    return this.get(id);
   }
 
   async cancelAbortion(actorId: string, id: string): Promise<BreedingService> {

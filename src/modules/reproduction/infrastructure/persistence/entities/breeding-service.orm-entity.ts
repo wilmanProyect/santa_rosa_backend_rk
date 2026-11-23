@@ -53,6 +53,12 @@ import { PregnancyCheckOrmEntity } from './pregnancy-check.orm-entity';
   `("status" = 'ABORTED') = ("abortion_date" IS NOT NULL)`,
 )
 @Check(
+  'CHK_breeding_services_dam_death',
+  `("status" = 'DAM_DIED') = ("dam_death_date" IS NOT NULL)
+   AND ("dam_death_date" IS NULL OR "dam_death_date" >= "service_date")
+   AND ("dam_death_lost_fetuses" IS NULL OR ("dam_death_confirmed_pregnancy" AND "dam_death_lost_fetuses" BETWEEN 1 AND 4))`,
+)
+@Check(
   'CHK_breeding_services_override',
   `num_nonnulls("kinship_override_reason", "kinship_override_by", "kinship_override_at") IN (0, 3)`,
 )
@@ -147,6 +153,28 @@ export class BreedingServiceOrmEntity extends AuditableOrmEntity {
     nullable: true,
   })
   abortionCause: string | null;
+
+  /** Muerte de la madre durante la gestación (igual a la fecha del inventario). */
+  @Column({ name: 'dam_death_date', type: 'date', nullable: true })
+  damDeathDate: string | null;
+
+  @Column({
+    name: 'dam_death_cause',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  damDeathCause: string | null;
+
+  @Column({
+    name: 'dam_death_confirmed_pregnancy',
+    type: 'boolean',
+    default: false,
+  })
+  damDeathConfirmedPregnancy: boolean;
+
+  @Column({ name: 'dam_death_lost_fetuses', type: 'smallint', nullable: true })
+  damDeathLostFetuses: number | null;
 
   @Column({ type: 'varchar', length: 1000, nullable: true })
   notes: string | null;

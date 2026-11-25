@@ -277,7 +277,8 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   {
     code: PERMISSIONS.AUDIT_READ,
     module: 'Auditoría',
-    description: 'Ver el historial de inicios de sesión',
+    description:
+      'Ver el historial de inicios de sesión y de actividad (datos ingresados, modificados y borrados)',
   },
 
   {

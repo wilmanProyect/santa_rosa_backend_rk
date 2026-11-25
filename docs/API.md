@@ -34,6 +34,7 @@ Salvo los marcados como **Público**, todos los endpoints exigen un access token
 - [Revisión de datos](#revisión-de-datos)
 - [Notificaciones y controles](#notificaciones-y-controles)
 - [Copias de seguridad](#copias-de-seguridad)
+- [Registro de actividad](#registro-de-actividad)
 - [Sistema](#sistema)
 - [Modelos de respuesta](#modelos-de-respuesta)
 - [Valores fijos](#valores-fijos)
@@ -162,7 +163,7 @@ Los define el sistema en [`permission-catalog.ts`](../src/modules/roles-permissi
 | `reviews:read` | Revisión de datos | Ver los avisos de datos por revisar en animales, montas y partos |
 | `reviews:create` | Revisión de datos | Crear avisos de revisión |
 | `reviews:resolve` | Revisión de datos | Marcar un aviso como corregido (o reabrirlo), indicando qué se hizo |
-| `audit:read` | Auditoría | Ver el historial de inicios de sesión |
+| `audit:read` | Auditoría | Ver el historial de inicios de sesión y el registro de actividad (datos ingresados, modificados y borrados) |
 | `backups:create` | Sistema | Descargar una copia de seguridad completa (base de datos, fotos y archivos) |
 | `backups:restore` | Sistema | Restaurar una copia de seguridad (reemplaza todos los datos y archivos; antes se guarda un respaldo del estado actual) |
 | `notifications:settings` | Sistema | Configurar los controles (meses entre controles de peso y sanitarios, edad de destete) y la revisión diaria de avisos |
@@ -182,6 +183,9 @@ Los define el sistema en [`permission-catalog.ts`](../src/modules/roles-permissi
 | `GET` | [`/auth/me`](#get-authme) | Autenticado |
 | `PUT` | [`/auth/me/password`](#put-authmepassword) | Autenticado |
 | `GET` | [`/auth/login-history`](#get-authlogin-history) | `audit:read` |
+| `GET` | [`/audit/activity`](#get-auditactivity) | `audit:read` |
+| `GET` | [`/audit/entities`](#get-auditentities) | `audit:read` |
+| `GET` | [`/animals/:animalId/activity`](#get-animalsanimalidactivity) | `audit:read` |
 | `POST` | [`/users`](#post-users) | `users:create` |
 | `GET` | [`/users`](#get-users) | `users:read` |
 | `GET` | [`/users/:id`](#get-usersid) | `users:read` |
@@ -2064,6 +2068,99 @@ Solo nombres de `GET /backups/files`: sin rutas. **201:** la [vista previa](#vis
 ### `DELETE /backups/restore/:restoreId`
 
 Descarta la restauración preparada y borra su copia temporal. **204.** `404` como en `confirm`.
+
+---
+
+## Registro de actividad
+
+Cada alta, modificación y borrado de datos queda registrado con el usuario, la fecha y hora, la IP y los valores anteriores y nuevos. También se registran algunas acciones que no cambian datos (eventos). No se registran las consultas.
+
+- **Lo guarda la base de datos** (triggers de PostgreSQL), en la misma transacción que el cambio: si la operación falla, no queda registro. Cubre todos los endpoints, incluidos los que se agreguen.
+- **No se puede modificar ni borrar.** Se guarda para siempre y entra en las copias de seguridad.
+- **Nunca guarda secretos.** La contraseña aparece como `"[oculto]"`. No se registran las sesiones, los intentos de inicio de sesión (están en [`/auth/login-history`](#get-authlogin-history)), las notificaciones ni las suscripciones push.
+- **Columnas que no se registran**, porque son técnicas: `created_at`, `created_by`, `updated_at`, `updated_by` y `deleted_at` (el borrado se ve en `action`). En usuarios tampoco se registran `failed_login_attempts`, `locked_until`, `last_login_at` ni `password_changed_at`; en fotos, los datos del archivo guardado (claves, tamaño, checksum).
+- **Restaurar una copia de seguridad** reemplaza también el registro por el del respaldo. Después de restaurar queda un evento `BACKUP_RESTORED`.
+- **La importación de planillas** (`pnpm import:animals`) queda como un solo evento `ANIMALS_IMPORTED`, no una fila por animal.
+- Los cambios hechos fuera de una petición (tareas programadas, migraciones, terminal) quedan con `source: "SYSTEM"` y `actorId: null`.
+
+### `GET /audit/activity`
+
+**Permiso:** `audit:read`. Paginado, del más reciente al más antiguo.
+
+| Query | Tipo | Descripción |
+| --- | --- | --- |
+| `userId` | uuid | Solo lo que hizo ese usuario. |
+| `entity` | texto | Tabla: un `code` de [`GET /audit/entities`](#get-auditentities). |
+| `recordId` | texto | Un registro (usar con `entity`). En las tablas sin id propio es la clave compuesta, por ejemplo `<permission_id>:<role_id>`. |
+| `animalId` | uuid | Todo lo relacionado con ese animal (igual que [`/animals/:animalId/activity`](#get-animalsanimalidactivity)). |
+| `action` | `CREATE` \| `UPDATE` \| `DELETE` \| `RESTORE` \| `EVENT` | Tipo de cambio. |
+| `event` | `CERTIFICATE_ISSUED` \| `BACKUP_DOWNLOADED` \| `BACKUP_RESTORED` \| `ANIMALS_IMPORTED` | Solo ese evento. |
+| `source` | `API` \| `SYSTEM` | Origen. |
+| `requestId` | uuid | Todos los cambios de una misma operación (por ejemplo, un parto con sus crías y el cambio de estado de la monta). |
+| `from`, `to` | `YYYY-MM-DD` | Rango de fechas, ambas incluidas, en la zona horaria de la cabaña (`FARM_TIME_ZONE`). |
+| `page`, `limit` | int | Paginación (por defecto 1 y 20, máximo 100). |
+
+Respuesta: el formato paginado de siempre, más `refs`.
+
+```json
+{
+  "items": [
+    {
+      "id": "1532",
+      "occurredAt": "2026-11-25T18:10:04.120Z",
+      "actorId": "a3b2...",
+      "actorUsername": "jperez",
+      "actorFullName": "Juan Pérez López",
+      "requestId": "9c1d...",
+      "ip": "192.168.1.20",
+      "source": "API",
+      "action": "UPDATE",
+      "entity": "animals",
+      "entityLabel": "Animal",
+      "recordId": "5e0f...",
+      "animalIds": ["5e0f..."],
+      "changes": {
+        "notes": ["Nota anterior", "Nota nueva"],
+        "breed_id": ["b1...", "b2..."]
+      },
+      "event": null,
+      "eventLabel": null,
+      "summary": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "refs": {
+    "5e0f...": { "type": "animal", "label": "148 COQUETA" },
+    "b1...": { "type": "breed", "label": "Dorper" },
+    "b2...": { "type": "breed", "label": "Santa Inés" }
+  }
+}
+```
+
+| Campo | Descripción |
+| --- | --- |
+| `id` | Número correlativo, como texto. |
+| `actorId`, `actorUsername`, `actorFullName` | Quién lo hizo. `null` si fue el sistema o si es un intento sin sesión. |
+| `action` | `CREATE` alta, `UPDATE` modificación, `DELETE` borrado (lógico o físico), `RESTORE` recuperación de un borrado lógico, `EVENT` acción. |
+| `entity`, `entityLabel` | Tabla y su nombre en pantalla. |
+| `animalIds` | Animales relacionados: el animal mismo, la madre y el padre de una monta o un parto, las crías, el animal de un pesaje o registro sanitario. |
+| `changes` | Según `action`: **`CREATE`** y **`DELETE`** dan `{ "campo": valor }` (los datos ingresados o los del registro borrado; en un borrado lógico, `{}`); **`UPDATE`** da `{ "campo": [anterior, nuevo] }`, solo los campos que cambiaron; **`EVENT`** da los detalles de la acción. Los nombres son los de la base (`snake_case`). |
+| `event`, `eventLabel`, `summary` | Solo en los eventos: tipo, nombre y descripción ("Certificado N.º SR-20261125-06A2E1"). |
+| `refs` | Nombre de cada id que aparece en la página (en `changes`, `recordId` o `animalIds`): animales, razas, colores, áreas, productos veterinarios, roles, permisos y usuarios. Un id sin entrada en `refs` se muestra tal cual. |
+
+Errores: `400` si un filtro no es válido.
+
+### `GET /audit/entities`
+
+**Permiso:** `audit:read`. Tablas registradas, para el filtro: `[{ "code": "animals", "label": "Animal" }, ...]`. `system` agrupa los eventos que no son de un registro (copias de seguridad, importación).
+
+### `GET /animals/:animalId/activity`
+
+**Permiso:** `audit:read`. Historial de cambios de un animal: su ficha, fotos, pesajes, registro sanitario, cambios de categoría genética, justificaciones de controles, montas y diagnósticos (como madre o padre), partos y crías, y los certificados emitidos. Incluye los animales borrados.
+
+Query: `action`, `from`, `to`, `page`, `limit`, como en [`GET /audit/activity`](#get-auditactivity). Misma respuesta. `404` si el animal no existe.
 
 ---
 

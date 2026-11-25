@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Inject,
   Logger,
   StreamableFile,
 } from '@nestjs/common';
@@ -19,6 +20,11 @@ import { CurrentUser } from '@modules/auth/infrastructure/decorators/current-use
 import type { AuthenticatedUser } from '@modules/auth/domain/authenticated-user';
 import { contentDisposition } from '@shared/infrastructure/storage/s3-file-storage.adapter';
 import {
+  AUDIT_EVENTS,
+  AuditEventType,
+} from '@shared/application/ports/audit-events.interface';
+import type { IAuditEvents } from '@shared/application/ports/audit-events.interface';
+import {
   BackupInProgressError,
   BackupService,
 } from '../application/backup.service';
@@ -29,7 +35,10 @@ import {
 export class BackupController {
   private readonly logger = new Logger(BackupController.name);
 
-  constructor(private readonly backups: BackupService) {}
+  constructor(
+    private readonly backups: BackupService,
+    @Inject(AUDIT_EVENTS) private readonly auditEvents: IAuditEvents,
+  ) {}
 
   @Get('download')
   @RequirePermissions(PERMISSIONS.BACKUPS_CREATE)
@@ -54,6 +63,12 @@ export class BackupController {
       }
       throw error;
     }
+    await this.auditEvents.record({
+      event: AuditEventType.BACKUP_DOWNLOADED,
+      entity: 'system',
+      summary: `Descargó ${backup.fileName}`,
+      details: { fileName: backup.fileName },
+    });
     const output = new PassThrough();
     backup.writeTo(output).catch((error: Error) => {
       // Las cabeceras ya se enviaron: se corta la descarga para que el

@@ -15,7 +15,7 @@ El contrato completo de cada endpoint (todos los campos, todos los códigos de e
 7. [Módulo: Usuarios](#7-módulo-usuarios)
 8. [Módulo: Roles y permisos](#8-módulo-roles-y-permisos)
 9. [Módulo: Áreas](#9-módulo-áreas)
-10. [Módulo: Auditoría de accesos](#10-módulo-auditoría-de-accesos)
+10. [Módulo: Auditoría de accesos y actividad](#10-módulo-auditoría-de-accesos-y-actividad)
 11. [Módulo: Catálogos de razas y colores](#11-módulo-catálogos-de-razas-y-colores)
 12. [Módulo: Animales](#12-módulo-animales)
 13. [Módulo: Fotos de animales](#13-módulo-fotos-de-animales)
@@ -311,7 +311,7 @@ export const can = (granted: string[], ...required: Permission[]) =>
 | Eliminar usuario | `users:delete` |
 | Menú **Roles** | `roles:read` · crear `roles:create` · editar `roles:update` · eliminar `roles:delete` |
 | Menú **Áreas** | `areas:read` · crear `areas:create` · editar `areas:update` · eliminar `areas:delete` |
-| Menú **Auditoría de accesos** | `audit:read` |
+| Menú **Auditoría** (accesos y actividad) y pestaña "Historial de cambios" de la ficha del animal | `audit:read` |
 | Botón **Descargar copia de seguridad** | `backups:create` |
 | Sección **Restaurar una copia de seguridad** | `backups:create` (para ver la pantalla) + `backups:restore` |
 | Campana, lista de notificaciones y notificaciones push | Solo sesión |
@@ -1189,7 +1189,11 @@ CRUD simple, sin paginación.
 
 ---
 
-## 10. Módulo: Auditoría de accesos
+## 10. Módulo: Auditoría de accesos y actividad
+
+Pantalla **Auditoría** (`audit:read`) con dos pestañas: **Accesos** y **Actividad**.
+
+### 10.1 Accesos
 
 `GET /auth/login-history?userId=&success=&page=&limit=` (`audit:read`) → `Paginated<LoginAttempt>`, del más reciente al más antiguo.
 
@@ -1197,6 +1201,75 @@ CRUD simple, sin paginación.
 - **Columnas:** fecha y hora, usuario escrito, resultado, motivo de fallo (`LOGIN_FAILURE_LABEL`), IP, navegador (`userAgent`).
 - `userId` es `null` cuando alguien escribió un usuario que no existe.
 - También sirve en la ficha del usuario, como pestaña "Accesos" con `?userId=<id>`.
+
+### 10.2 Actividad
+
+`GET /audit/activity` (`audit:read`) → `AuditPage`: quién ingresó, modificó o borró qué dato, y cuándo. Contrato completo en [API.md](API.md#registro-de-actividad).
+
+```ts
+type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE' | 'EVENT';
+type AuditEventType = 'CERTIFICATE_ISSUED' | 'BACKUP_DOWNLOADED' | 'BACKUP_RESTORED' | 'ANIMALS_IMPORTED';
+
+interface AuditEntry {
+  id: string;
+  occurredAt: string;
+  actorId: string | null;
+  actorUsername: string | null;
+  actorFullName: string | null;
+  requestId: string | null;
+  ip: string | null;
+  source: 'API' | 'SYSTEM';
+  action: AuditAction;
+  entity: string;
+  entityLabel: string;
+  recordId: string | null;
+  animalIds: string[];
+  /** CREATE/DELETE: { campo: valor } · UPDATE: { campo: [anterior, nuevo] } · EVENT: detalles */
+  changes: Record<string, unknown> | null;
+  event: AuditEventType | null;
+  eventLabel: string | null;
+  summary: string | null;
+}
+
+interface AuditRef {
+  type: 'animal' | 'breed' | 'color' | 'area' | 'product' | 'role' | 'permission' | 'user';
+  label: string;
+}
+
+interface AuditPage extends Paginated<AuditEntry> {
+  /** Nombre de cada id que aparece en la página. */
+  refs: Record<string, AuditRef>;
+}
+
+const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
+  CREATE: 'Creó',
+  UPDATE: 'Modificó',
+  DELETE: 'Eliminó',
+  RESTORE: 'Recuperó',
+  EVENT: 'Acción',
+};
+```
+
+- **Filtros:** usuario (select de `GET /users`), tabla (select de `GET /audit/entities`), acción, rango de fechas (`from`/`to` en `YYYY-MM-DD`, ambas incluidas). Por defecto, los últimos 7 días.
+- **Filas:** fecha y hora · usuario (`actorFullName`, o "Sistema" si `source` es `SYSTEM`) · acción · `entityLabel` · registro (el nombre de `refs[recordId]` si existe) · resumen. En los eventos, `eventLabel` y `summary`.
+- **Detalle** al expandir la fila:
+  - `UPDATE`: tabla de tres columnas, **Campo · Antes · Después**, una fila por cada campo de `changes`.
+  - `CREATE`: los datos ingresados, **Campo · Valor**.
+  - `DELETE`: los datos del registro borrado. En un borrado lógico `changes` es `{}`: muestre solo "Eliminó".
+  - `EVENT`: `summary` y, si interesa, los detalles.
+  - Botón **"Ver la operación completa"** con `?requestId=<requestId>`: todo lo que se guardó en la misma petición (por ejemplo, un parto, sus crías y el cambio de estado de la monta).
+- **Valores:**
+  - Si el valor es un id que está en `refs`, muestre `refs[id].label` ("Dorper", "148 COQUETA").
+  - `null` → "—"; `true`/`false` → "Sí"/"No"; fechas `YYYY-MM-DD` como fecha local; los valores de enums con las etiquetas de la [sección 5](#5-etiquetas-de-los-valores-fijos).
+  - `"[oculto]"` se muestra tal cual (es la contraseña: solo se sabe que cambió).
+- **Nombres de campo:** vienen como en la base (`snake_case`: `weight_kg`, `breed_id`). Arme un mapa de etiquetas con los campos de los formularios y, para los que falten, muestre el nombre con `_` reemplazado por espacios.
+- También sirve en la ficha del usuario, como pestaña "Actividad" con `?userId=<id>`.
+
+### 10.3 Historial de cambios del animal
+
+Pestaña de la ficha (solo con `audit:read`): `GET /animals/:id/activity?page=&limit=&action=&from=&to=` → `AuditPage`. Trae los cambios de la ficha, fotos, pesajes, sanidad, categoría genética, controles, montas, diagnósticos, partos y crías relacionados con el animal, y los certificados emitidos.
+
+Muéstrela como línea de tiempo, con el mismo detalle de [10.2](#102-actividad). Agrupe por `requestId` para que, por ejemplo, el registro de un parto se vea como un solo evento.
 
 ---
 
@@ -1477,6 +1550,7 @@ Estructura sugerida de la ficha (`GET /animals/:id`):
 - **Datos por revisar:** aviso arriba de la ficha si el animal tiene avisos pendientes ([sección 18](#18-módulo-datos-por-revisar)).
 - **Botón "Emitir certificado":** PDF con toda la ficha ([12.6.1](#1261-certificado-del-animal-pdf-generado)).
 - **Auditoría:** creado y modificado (fecha y usuario).
+- **Historial de cambios** (solo con `audit:read`): pestaña con `GET /animals/:id/activity` ([10.3](#103-historial-de-cambios-del-animal)).
 
 ### 12.7.1 Árbol genealógico
 
@@ -2252,7 +2326,7 @@ En `/configuracion`, una sección **"Controles y avisos"**, visible con `notific
 4. **Áreas** (CRUD simple: sirve para fijar los patrones de listado, formulario y confirmación).
 5. **Roles** con la pantalla de permisos agrupados.
 6. **Usuarios:** listado, alta, edición, baja, roles, permisos individuales, restablecer contraseña.
-7. **Auditoría de accesos.**
+7. **Auditoría:** accesos y registro de actividad (la pestaña del animal, cuando exista la ficha).
 8. **Catálogos** de razas y colores.
 9. **Animales:** listado, formulario con secciones condicionales, caso especial, ficha, salida, crías.
 10. **Certificado ABSID.**
@@ -2287,3 +2361,4 @@ En `/configuracion`, una sección **"Controles y avisos"**, visible con `notific
 - [ ] El permiso de notificaciones se pide solo al tocar el botón, y al cerrar sesión se borra la suscripción **antes** del token.
 - [ ] `sw.js` se sirve desde la raíz y sin caché.
 - [ ] Justificar peso o sanidad exige nueva fecha; en el destete se puede cerrar sin fecha.
+- [ ] El registro de actividad muestra los ids con `refs` y los valores `"[oculto]"` tal cual, sin intentar mostrar la contraseña.

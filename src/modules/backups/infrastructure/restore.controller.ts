@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   ParseUUIDPipe,
   Post,
@@ -36,6 +37,11 @@ import {
   ConfirmRestoreDto,
   StageServerFileDto,
 } from '../application/restore.dto';
+import {
+  AUDIT_EVENTS,
+  AuditEventType,
+} from '@shared/application/ports/audit-events.interface';
+import type { IAuditEvents } from '@shared/application/ports/audit-events.interface';
 
 /** Archivo que deja FileInterceptor con `dest`: guardado en disco. */
 interface UploadedBackupFile {
@@ -58,7 +64,10 @@ const actorOf = (user: AuthenticatedUser) => ({
 @ApiBearerAuth()
 @Controller('backups')
 export class RestoreController {
-  constructor(private readonly restores: RestoreService) {}
+  constructor(
+    private readonly restores: RestoreService,
+    @Inject(AUDIT_EVENTS) private readonly auditEvents: IAuditEvents,
+  ) {}
 
   @Get('files')
   @RequirePermissions(PERMISSIONS.BACKUPS_RESTORE)
@@ -146,6 +155,18 @@ export class RestoreController {
       dto.confirmation,
       actorOf(actor),
     );
+    // Después de restaurar: queda en el historial de la base restaurada.
+    await this.auditEvents.record({
+      event: AuditEventType.BACKUP_RESTORED,
+      entity: 'system',
+      summary: `Restauró ${outcome.origin.fileName} (respaldo del ${outcome.restoredFrom})`,
+      details: {
+        fileName: outcome.origin.fileName,
+        backupCreatedAt: outcome.restoredFrom,
+        safetyCopy: outcome.safetyCopy.fileName,
+        migrationsApplied: outcome.migrationsApplied,
+      },
+    });
     return {
       ...outcome,
       // Los usuarios y las sesiones ahora son los del respaldo.

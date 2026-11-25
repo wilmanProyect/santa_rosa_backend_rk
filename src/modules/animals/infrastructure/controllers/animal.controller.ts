@@ -60,6 +60,11 @@ import { HealthRecordService } from '../../application/use-cases/health/health-r
 import { ANIMAL_WEIGHING_REPOSITORY } from '../../domain/repositories/animal-weighing.repository.interface';
 import type { IAnimalWeighingRepository } from '../../domain/repositories/animal-weighing.repository.interface';
 import { Animal } from '../../domain/models/animal.model';
+import {
+  AUDIT_EVENTS,
+  AuditEventType,
+} from '@shared/application/ports/audit-events.interface';
+import type { IAuditEvents } from '@shared/application/ports/audit-events.interface';
 
 @ApiTags('Animales')
 @ApiBearerAuth()
@@ -80,6 +85,7 @@ export class AnimalController {
     private readonly health: HealthRecordService,
     @Inject(ANIMAL_WEIGHING_REPOSITORY)
     private readonly weighingRepository: IAnimalWeighingRepository,
+    @Inject(AUDIT_EVENTS) private readonly auditEvents: IAuditEvents,
   ) {}
 
   @Post()
@@ -268,6 +274,14 @@ export class AnimalController {
       actor.id,
       id,
     );
+    await this.auditEvents.record({
+      event: AuditEventType.CERTIFICATE_ISSUED,
+      entity: 'animals',
+      recordId: id,
+      animalIds: [id],
+      summary: `Certificado N.º ${certificate.number}`,
+      details: { number: certificate.number },
+    });
     res.setHeader('X-Certificate-Number', certificate.number);
     return new StreamableFile(certificate.content, {
       type: 'application/pdf',

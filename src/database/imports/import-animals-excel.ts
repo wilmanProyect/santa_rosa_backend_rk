@@ -341,6 +341,9 @@ async function main() {
       );
       if (!admin[0]) throw new Error('No existe el usuario "admin"');
       const actorId: string = admin[0].id;
+      // Carga masiva: en el historial queda como un solo evento (al final), no
+      // una fila por animal, pesaje y registro sanitario.
+      await manager.query(`SELECT set_config('app.audit_skip', 'on', true)`);
 
       const breeds = await loadBreeds(manager, actorId);
       const colors = await loadColors(manager, actorId);
@@ -411,6 +414,19 @@ async function main() {
 
       summarize(planned, externals, weighings, healthRecords);
       if (dryRun) throw new DryRunRollback();
+      await manager.query(
+        `INSERT INTO audit_log (actor_id, source, action, entity, event, summary, changes)
+         VALUES ($1, 'SYSTEM', 'EVENT', 'system', 'ANIMALS_IMPORTED', $2, $3)`,
+        [
+          actorId,
+          `Importó ${planned.length} animales, ${externals.length} externos, ${weighings.length} pesajes y ${healthRecords.length} registros sanitarios`,
+          JSON.stringify({
+            files: [animalsFile, weighingsFile, healthFile]
+              .filter(Boolean)
+              .map((f) => basename(f)),
+          }),
+        ],
+      );
     });
   } catch (error) {
     if (!(error instanceof DryRunRollback)) throw error;

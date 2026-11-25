@@ -104,6 +104,10 @@ services:
       S3_BUCKET: ${S3_BUCKET:-santa-rosa}
       S3_PRESIGNED_URL_TTL_SECONDS: ${S3_PRESIGNED_URL_TTL_SECONDS:-900}
       BACKUP_DIR: /app/backups
+      # Notificaciones push (opcional): mailto: o https:// de contacto.
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # false desactiva la revisión diaria de avisos.
+      NOTIFICATIONS_SCHEDULER: ${NOTIFICATIONS_SCHEDULER:-true}
       # Tamaño máximo de un respaldo subido para restaurarlo desde el sistema.
       BACKUP_UPLOAD_MAX_MB: ${BACKUP_UPLOAD_MAX_MB:-2048}
     ports:

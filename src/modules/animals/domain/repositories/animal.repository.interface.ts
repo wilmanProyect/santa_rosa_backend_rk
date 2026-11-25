@@ -79,6 +79,11 @@ export interface IAnimalRepository {
     options?: SaveAnimalOptions,
   ): Promise<void>;
   findBirthLink(id: string): Promise<BirthLink | null>;
+  /**
+   * Número de certificado del animal. Si todavía no tiene, guarda `candidate`
+   * y lo devuelve; si ya tiene, devuelve el guardado (no cambia nunca).
+   */
+  assignCertificateNumber(id: string, candidate: string): Promise<string>;
   /** Historial de categoría genética, del más antiguo al más reciente. */
   findGeneticCategoryHistory(
     animalId: string,

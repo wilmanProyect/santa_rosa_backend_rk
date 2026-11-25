@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { NotificationScheduler } from './modules/notifications/infrastructure/notification-scheduler';
 import { DomainExceptionFilter } from './shared/infrastructure/filters/domain-exception.filter';
 
 async function bootstrap() {
@@ -55,6 +56,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
+  // Revisión diaria de avisos (partos, destete, peso, sanidad). Solo en la API,
+  // no en los comandos de terminal que también levantan módulos.
+  app.get(NotificationScheduler).start();
   // Subir y restaurar un respaldo grande puede tardar más que los 5 minutos que
   // Node permite por defecto. Igual que proxy_read_timeout del nginx (900 s).
   app.getHttpServer().requestTimeout = 900_000;

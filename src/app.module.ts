@@ -12,6 +12,7 @@ import { VeterinaryModule } from './modules/veterinary/veterinary.module';
 import { BackupsHttpModule } from './modules/backups/backups-http.module';
 import { ReproductionModule } from './modules/reproduction/reproduction.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
@@ -25,6 +26,7 @@ import { buildDataSourceOptions } from './database/database.config';
     BackupsHttpModule,
     ReproductionModule,
     ReviewsModule,
+    NotificationsModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,

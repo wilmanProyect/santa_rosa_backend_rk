@@ -1,3 +1,4 @@
+import { PEDIGREE_GENERATIONS } from '../../domain/pedigree-tree';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
@@ -274,4 +275,19 @@ export class RecordAbortionDto {
   @MaxLength(500)
   @IsOptional()
   cause?: string;
+}
+
+export class PedigreeQueryDto {
+  @ApiPropertyOptional({
+    default: PEDIGREE_GENERATIONS.default,
+    minimum: PEDIGREE_GENERATIONS.min,
+    maximum: PEDIGREE_GENERATIONS.max,
+    description: '1 = padres, 2 = abuelos, 3 = bisabuelos, 4 = tatarabuelos...',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(PEDIGREE_GENERATIONS.min)
+  @Max(PEDIGREE_GENERATIONS.max)
+  @IsOptional()
+  generations: number = PEDIGREE_GENERATIONS.default;
 }

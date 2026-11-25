@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import PDFDocument from 'pdfkit';
-import { toDateOnly } from '@shared/domain/date-only';
 import type {
   AnimalCertificateData,
   IAnimalCertificateRenderer,
@@ -12,8 +11,8 @@ import { Animal } from '../../domain/models/animal.model';
 import { AnimalStatus } from '../../domain/enums/animal.enums';
 import {
   DOSE_UNIT_LABEL,
-  ENTRY_ORIGIN_LABEL,
   GENETIC_CATEGORY_LABEL,
+  GENETIC_CATEGORY_SHORT,
   HEALTH_TYPE_LABEL,
   PURITY_LABEL,
   ROUTE_LABEL,
@@ -154,8 +153,8 @@ class CertificateWriter {
     this.farmRule(199);
 
     this.identificationPanel(230.3);
-    this.genealogyPanel(374.3);
-    this.breederPanel(529.6);
+    this.genealogyPanel(384, 548);
+    this.breederPanel(556);
     this.signatures(726);
     doc.image(this.images.qr, 509.2, 660.3, { width: 64.5 });
   }
@@ -183,41 +182,24 @@ class CertificateWriter {
   private identificationPanel(top: number): void {
     const { data } = this;
     const animal = data.animal;
-    const bottom = top + 135;
+    const bottom = top + 146;
     this.panel('I. IDENTIFICACIÓN DEL EJEMPLAR', top, bottom, 8);
 
     const birthDate = animal.getBirthDate();
     const alive = animal.getStatus() === AnimalStatus.ALIVE;
-    const ageReference = alive
-      ? toDateOnly(data.issuedAt)
-      : animal.getStatusDate();
-    const age =
-      birthDate && ageReference ? formatAge(birthDate, ageReference) : null;
     const category = animal.getGeneticCategory();
-    const absid = [
-      animal.getAbsidRegistry(),
-      animal.getAbsidCertificateCode()
-        ? `cert. ${animal.getAbsidCertificateCode()}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    const statusDate = animal.getStatusDate();
     const { birth, last } = data.weights;
 
     const rowsTop = top + PANEL.header + 6;
+    const step = 14;
     this.coverFields(
       [
         ['Nombre', animal.getName()],
-        ['Registro ABSID', absid],
+        ['Registro ABSID', animal.getAbsidRegistry()],
+        ['Cod. certificado ABSID', animal.getAbsidCertificateCode()],
         ['Raza', animal.getBreed().getName()],
         ['Sexo', SEX_LABEL[animal.getSex()]],
-        [
-          'Fecha de nacimiento',
-          birthDate
-            ? `${formatDate(birthDate)}${age ? ` (${age}${alive ? '' : ' a la salida'})` : ''}`
-            : null,
-        ],
+        ['Fecha de nacimiento', formatOptionalDate(birthDate)],
         ['Color', animal.getColor()?.getName() ?? null],
         ['Categoría', category ? GENETIC_CATEGORY_LABEL[category] : null],
       ],
@@ -225,6 +207,7 @@ class CertificateWriter {
       rowsTop,
       262,
       7,
+      step,
     );
     this.coverFields(
       [
@@ -233,13 +216,7 @@ class CertificateWriter {
         ['Peso al nacer', birth ? formatKg(birth.weightKg) : null],
         [
           alive ? 'Peso actual' : 'Último peso',
-          last
-            ? `${formatKg(last.weightKg)} (${formatDate(last.weighedAt)})`
-            : null,
-        ],
-        [
-          'Estado',
-          `${STATUS_LABEL[animal.getStatus()]}${!alive && statusDate ? ` el ${formatDate(statusDate)}` : ''}`,
+          last ? formatKg(last.weightKg) : null,
         ],
         [
           'Fecha de registro',
@@ -251,93 +228,185 @@ class CertificateWriter {
       rowsTop,
       266,
       7,
+      step,
     );
   }
 
-  private genealogyPanel(top: number): void {
-    const { data } = this;
-    this.panel('II. GENEALOGÍA', top, top + 137.3, 8);
-    const boxTop = top + 40;
-    this.parentBox(74.3, boxTop, 'PADRE', data.sire);
-    this.parentBox(335, boxTop, 'MADRE', data.dam);
+  /**
+   * Árbol horizontal de tres generaciones: el animal a la izquierda, los padres
+   * en el centro y los abuelos a la derecha, con la madre arriba y el padre abajo.
+   */
+  private genealogyPanel(top: number, bottom: number): void {
+    const { doc, data } = this;
+    this.panel('II. GENEALOGÍA', top, bottom, 8);
+
+    const gap = 34;
+    const left = PANEL.x + 14;
+    const boxWidth = (PANEL.width - 28 - gap * 2) / 3;
+    const colX = [0, 1, 2].map((i) => left + i * (boxWidth + gap));
+
+    const headersY = top + PANEL.header + 7;
+    doc.font(FONT.bold).fontSize(7).fillColor(COLOR.green);
+    ['ANIMAL', 'PADRES', 'ABUELOS'].forEach((title, i) =>
+      doc.text(title, colX[i], headersY, {
+        width: boxWidth,
+        characterSpacing: 0.8,
+        lineBreak: false,
+      }),
+    );
+
+    // Cada abuelo ocupa un cuarto del alto; los padres y el animal quedan centrados.
+    const treeTop = headersY + 13;
+    const slot = (bottom - 6 - treeTop) / 4;
+    const quarter = (i: number) => treeTop + slot * (i + 0.5);
+    const parentY = [
+      (quarter(0) + quarter(1)) / 2,
+      (quarter(2) + quarter(3)) / 2,
+    ];
+    const rootY = (parentY[0] + parentY[1]) / 2;
+
+    // Líneas: del borde derecho de una casilla a sus dos padres.
+    const connect = (fromCol: number, fromY: number, toYs: number[]) => {
+      const startX = colX[fromCol] + boxWidth;
+      const midX = startX + gap / 2;
+      const endX = colX[fromCol + 1];
+      doc.lineWidth(0.75).strokeColor(COLOR.muted);
+      doc.moveTo(startX, fromY).lineTo(midX, fromY).stroke();
+      doc
+        .moveTo(midX, Math.min(...toYs))
+        .lineTo(midX, Math.max(...toYs))
+        .stroke();
+      for (const y of toYs) doc.moveTo(midX, y).lineTo(endX, y).stroke();
+    };
+
+    connect(0, rootY, parentY);
+    this.treeBox(colX[0], rootY, boxWidth, 30, data.animal, 'root');
+
+    const parents: [PedigreeNode | null, string][] = [
+      [data.dam, 'Madre desconocida'],
+      [data.sire, 'Padre desconocido'],
+    ];
+    parents.forEach(([node, unknown], i) => {
+      const y = parentY[i];
+      if (!node) {
+        this.treeBox(colX[1], y, boxWidth, 28, null, 'parent', unknown);
+        return;
+      }
+      const grandY = [quarter(i * 2), quarter(i * 2 + 1)];
+      connect(1, y, grandY);
+      this.treeBox(colX[1], y, boxWidth, 28, node.animal, 'parent');
+      this.treeBox(
+        colX[2],
+        grandY[0],
+        boxWidth,
+        24,
+        node.dam,
+        'grand',
+        'Madre desconocida',
+      );
+      this.treeBox(
+        colX[2],
+        grandY[1],
+        boxWidth,
+        24,
+        node.sire,
+        'grand',
+        'Padre desconocido',
+      );
+    });
   }
 
-  /** Padre o madre: arete grande, su nombre y registro, y sus propios padres. */
-  private parentBox(
+  /** Casilla del árbol, centrada verticalmente en `centerY`. */
+  private treeBox(
     x: number,
-    y: number,
-    label: string,
-    node: PedigreeNode | null,
+    centerY: number,
+    width: number,
+    height: number,
+    animal: Animal | null,
+    kind: 'root' | 'parent' | 'grand',
+    unknownLabel = 'Desconocido',
   ): void {
     const { doc } = this;
-    const width = 187.1;
-    const header = 28;
-    const height = 88;
-    doc
-      .rect(x, y, width, height)
-      .lineWidth(1.5)
-      .strokeColor(COLOR.green)
-      .stroke();
-    doc.rect(x, y, width, header).fill(COLOR.green);
-    doc
-      .font(FONT.bold)
-      .fontSize(10)
-      .fillColor('#ffffff')
-      .text(label, x, y + 9.5, { width, align: 'center', lineBreak: false });
+    const y = centerY - height / 2;
+    const nameSize = kind === 'grand' ? 7.5 : 8.5;
+    const detailSize = kind === 'grand' ? 6 : 6.5;
+    const inner = { x: x + 7, width: width - 14 };
 
-    const inner = { x: x + 8, width: width - 16 };
-    const line = (
-      text: string,
-      top: number,
-      font: string,
-      size: number,
-      color: string,
-    ) =>
-      doc.font(font).fontSize(size).fillColor(color).text(text, inner.x, top, {
-        width: inner.width,
-        align: 'center',
-        lineBreak: false,
-        ellipsis: true,
-      });
-
-    const animal = node?.animal ?? null;
     if (!animal) {
-      line('NO REGISTRADO', y + header + 20, FONT.bold, 9, COLOR.muted);
+      doc.save();
+      doc
+        .roundedRect(x, y, width, height, 4)
+        .lineWidth(0.75)
+        .dash(2.5, { space: 2 })
+        .fillAndStroke('#ffffff', COLOR.border);
+      doc.restore();
+      doc
+        .font(FONT.italic)
+        .fontSize(nameSize)
+        .fillColor(COLOR.muted)
+        .text(upper(unknownLabel), inner.x, centerY - nameSize / 2 + 0.5, {
+          width: inner.width,
+          lineBreak: false,
+          ellipsis: true,
+        });
       return;
     }
-    const tag = animal.getEarTag();
-    line(
-      upper(tag ?? describe(animal)),
-      y + header + 7,
-      FONT.display,
-      11,
-      COLOR.text,
-    );
-    const absid = animal.getAbsidRegistry();
+
+    const root = kind === 'root';
+    doc
+      .roundedRect(x, y, width, height, 4)
+      .lineWidth(root ? 1.25 : 0.9)
+      .fillAndStroke(
+        root ? COLOR.green : '#ffffff',
+        root ? COLOR.gold : COLOR.green,
+      );
+
+    const category = animal.getGeneticCategory();
+    // En un reproductor externo, su registro externo es el ABSID.
+    const registry = animal.getIsExternal()
+      ? animal.getExternalRegistry()
+      : animal.getAbsidRegistry();
     const detail = [
-      tag ? animal.getName() : null,
-      absid ? (/^absid/i.test(absid) ? absid : `ABSID ${absid}`) : null,
-      animal.getBreed().getName(),
+      category ? GENETIC_CATEGORY_SHORT[category] : null,
+      registry
+        ? /^absid/i.test(registry)
+          ? registry
+          : `ABSID ${registry}`
+        : null,
       animal.getIsExternal() ? 'Externo' : null,
     ]
       .filter(Boolean)
       .join(' · ');
-    line(upper(detail), y + header + 24, FONT.bold, 7, COLOR.muted);
-    const grand = (title: string, parent: Animal | null) =>
-      `${title}: ${parent ? describe(parent) : EMPTY}`;
-    line(
-      upper(`${grand('Abuelo', node!.sire)}   ${grand('Abuela', node!.dam)}`),
-      y + header + 40,
-      FONT.regular,
-      6.5,
-      COLOR.muted,
-    );
+
+    const nameY = detail
+      ? centerY - (nameSize + detailSize + 3) / 2
+      : centerY - nameSize / 2;
+    doc
+      .font(FONT.display)
+      .fontSize(nameSize)
+      .fillColor(root ? '#ffffff' : COLOR.text)
+      .text(upper(treeLabel(animal)), inner.x, nameY, {
+        width: inner.width,
+        lineBreak: false,
+        ellipsis: true,
+      });
+    if (detail) {
+      doc
+        .font(FONT.bold)
+        .fontSize(detailSize)
+        .fillColor(root ? COLOR.panel : COLOR.muted)
+        .text(upper(detail), inner.x, nameY + nameSize + 3, {
+          width: inner.width,
+          lineBreak: false,
+          ellipsis: true,
+        });
+    }
   }
 
   private breederPanel(top: number): void {
     const { data } = this;
-    this.panel('III. CRIADOR Y PROPIETARIO', top, top + 112.7, 9);
-    const rowsTop = top + PANEL.header + 22;
+    this.panel('III. CRIADOR Y PROPIETARIO', top, top + 95, 9);
+    const rowsTop = top + PANEL.header + 14;
     const issuer = data.issuedBy.fullName || data.issuedBy.username;
     this.coverFields(
       [
@@ -424,9 +493,9 @@ class CertificateWriter {
     top: number,
     width: number,
     size: number,
+    step = size * 2.25,
   ): void {
     const { doc } = this;
-    const step = size * 2.25;
     doc.font(FONT.bold).fontSize(size).fillColor(COLOR.text);
     rows.forEach(([label, value], i) => {
       const text = value && value.trim() !== '' ? value : EMPTY;
@@ -507,15 +576,14 @@ class CertificateWriter {
     this.photo(this.left + this.width - photoSize, top, photoSize);
     doc.y = top;
 
-    const origin = animal.getEntryOrigin();
     const rows: [string, string | null][] = [
-      ['Origen', origin ? ENTRY_ORIGIN_LABEL[origin] : null],
       ['Fecha de ingreso', formatOptionalDate(animal.getEntryDate())],
       ['Cabaña de procedencia', animal.getSourceFarm()],
-      ['Estado', STATUS_LABEL[animal.getStatus()]],
     ];
+    // El estado solo se imprime si el animal ya salió de la cabaña.
     if (animal.getStatus() !== AnimalStatus.ALIVE) {
       rows.push(
+        ['Estado', STATUS_LABEL[animal.getStatus()]],
         ['Fecha del estado', formatOptionalDate(animal.getStatusDate())],
         ['Motivo', animal.getStatusReason()],
       );
@@ -537,14 +605,16 @@ class CertificateWriter {
   private weights(): void {
     const { data } = this;
     // Resumen + encabezado y primera fila de la tabla: que no queden partidos.
-    this.sectionTitle('Pesos', data.weighings.length > 0 ? 150 : 90);
+    this.sectionTitle('Pesos', data.weighings.length > 0 ? 165 : 105);
+    const { last } = data.weights;
     const summary = (w: { weighedAt: string; weightKg: number } | null) =>
       w ? `${formatKg(w.weightKg)}  (${formatDate(w.weighedAt)})` : null;
     this.fields(
       [
         ['Al nacer', summary(data.weights.birth)],
         ['Al destete', summary(data.weights.weaning)],
-        ['Último pesaje', summary(data.weights.last)],
+        ['Último pesaje', last ? formatKg(last.weightKg) : null],
+        ['Fecha de pesaje', last ? formatDate(last.weighedAt) : null],
       ],
       this.width,
     );
@@ -558,13 +628,16 @@ class CertificateWriter {
         { header: 'C. corporal', width: 65, align: 'center' },
         { header: 'Observaciones', width: this.width - 285 },
       ],
-      data.weighings.map((w) => [
-        formatDate(w.getWeighedAt()),
-        WEIGHING_TYPE_LABEL[w.getType()],
-        `${formatKg(w.getWeightKg())}${w.getIsEstimated() ? ' *' : ''}`,
-        w.getBodyConditionScore()?.toString().replace('.', ',') ?? EMPTY,
-        w.getNotes() ?? '',
-      ]),
+      // Llegan los más recientes primero: la tabla va de la fecha más antigua a la más nueva.
+      [...data.weighings]
+        .reverse()
+        .map((w) => [
+          formatDate(w.getWeighedAt()),
+          WEIGHING_TYPE_LABEL[w.getType()],
+          `${formatKg(w.getWeightKg())}${w.getIsEstimated() ? ' *' : ''}`,
+          w.getBodyConditionScore()?.toString().replace('.', ',') ?? EMPTY,
+          w.getNotes() ?? '',
+        ]),
     );
     const notes: string[] = [];
     if (data.weighings.some((w) => w.getIsEstimated())) {
@@ -582,18 +655,6 @@ class CertificateWriter {
     const { data } = this;
     this.sectionTitle('Registro sanitario y de manejo');
 
-    const { meat, milk } = data.withdrawal;
-    if (meat) {
-      this.notice(
-        `Período de retiro de carne vigente por ${meat.productName} (aplicado el ${formatDate(meat.appliedAt)}): no faenar hasta el ${formatDate(meat.endsOn)}.`,
-      );
-    }
-    if (milk) {
-      this.notice(
-        `Período de retiro de leche vigente por ${milk.productName}: no usar la leche hasta el ${formatDate(milk.endsOn)}.`,
-      );
-    }
-
     if (data.healthRecords.length === 0) {
       this.footnote('Sin eventos registrados.');
       return;
@@ -606,7 +667,8 @@ class CertificateWriter {
         { header: 'Dosis / vía', width: 90 },
         { header: 'Motivo / observaciones', width: this.width - 365 },
       ],
-      data.healthRecords.map((r) => {
+      // Del evento más antiguo al más nuevo.
+      [...data.healthRecords].reverse().map((r) => {
         const quantity = r.getDoseQuantity();
         const unit = r.getDoseUnit();
         const route = r.getRoute();
@@ -654,9 +716,6 @@ class CertificateWriter {
   private footers(): void {
     const { doc, data } = this;
     const range = doc.bufferedPageRange();
-    const issuedBy = data.issuedBy.fullName
-      ? `${data.issuedBy.fullName} (${data.issuedBy.username})`
-      : data.issuedBy.username;
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
       // Escribir dentro del margen inferior sin que pdfkit agregue una página.
@@ -683,24 +742,22 @@ class CertificateWriter {
           .strokeColor(COLOR.gold)
           .stroke();
         doc.font(FONT.regular).fontSize(8).fillColor(COLOR.muted);
-        doc.text(
-          `Emitido por ${issuedBy} el ${formatDateTime(data.issuedAt, data.timeZone)}.`,
-          this.left,
-          y,
-          { width: this.width - pageWidth, lineBreak: false, ellipsis: true },
-        );
+        doc.text(`Emitido por ${data.farm.name}`, this.left, y, {
+          width: this.width - pageWidth,
+          lineBreak: false,
+          ellipsis: true,
+        });
         doc.text(
           `Página ${i - range.start + 1} de ${range.count}`,
           this.left + this.width - pageWidth,
           y,
           { width: pageWidth, align: 'right', lineBreak: false },
         );
-        doc.text(
-          `Certificado N.º ${data.number}. Generado con los datos registrados en el sistema a la fecha de emisión.`,
-          this.left,
-          y + 11,
-          { width: this.width, lineBreak: false, ellipsis: true },
-        );
+        doc.text(`Certificado N.º ${data.number}.`, this.left, y + 11, {
+          width: this.width,
+          lineBreak: false,
+          ellipsis: true,
+        });
       }
       doc.page.margins.bottom = bottom;
     }
@@ -883,6 +940,14 @@ function describe(animal: Animal): string {
     animal.getExternalRegistry() ||
     animal.getAbsidRegistry() ||
     'Sin identificación'
+  );
+}
+
+/** "106 — ODESSA" para las casillas del árbol. */
+function treeLabel(animal: Animal): string {
+  return (
+    [animal.getEarTag(), animal.getName()].filter(Boolean).join(' — ') ||
+    describe(animal)
   );
 }
 

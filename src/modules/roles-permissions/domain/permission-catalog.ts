@@ -57,6 +57,8 @@ export const PERMISSIONS = {
 
   BACKUPS_CREATE: 'backups:create',
   BACKUPS_RESTORE: 'backups:restore',
+
+  NOTIFICATIONS_SETTINGS: 'notifications:settings',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -278,6 +280,12 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     description: 'Ver el historial de inicios de sesión',
   },
 
+  {
+    code: PERMISSIONS.NOTIFICATIONS_SETTINGS,
+    module: 'Sistema',
+    description:
+      'Configurar los controles (meses entre controles de peso y sanitarios, edad de destete) y la revisión diaria de avisos',
+  },
   {
     code: PERMISSIONS.BACKUPS_CREATE,
     module: 'Sistema',

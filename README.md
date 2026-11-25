@@ -154,6 +154,8 @@ Ver [.env.example](.env.example). Las principales:
 | `GARAGE_RPC_SECRET` / `GARAGE_ADMIN_TOKEN` | Secretos internos de Garage. **Obligatorios**. |
 | `S3_PRESIGNED_URL_TTL_SECONDS` | Validez de las URL temporales de las fotos (por defecto 900 s). |
 | `CORS_ORIGINS` | URLs del frontend autorizadas, separadas por coma. |
+| `VAPID_SUBJECT` | Contacto (`mailto:` o `https://`) que se envía a los servicios de notificaciones push. Opcional: por defecto, la primera URL `https` de `CORS_ORIGINS`. |
+| `NOTIFICATIONS_SCHEDULER` | `false` desactiva la revisión diaria de avisos (por ejemplo, en una segunda instancia de la API). |
 | `TRUST_PROXY` | `true` si la API está detrás de un proxy inverso. |
 | `FARM_NAME` / `FARM_TIME_ZONE` | Nombre de la cabaña y zona horaria impresos en el certificado del animal (por defecto "Cabaña Santa Rosa" / `America/La_Paz`). |
 | `FARM_CODE` / `FARM_BREEDERS` / `FARM_LOCALITY` / `FARM_PHONE` / `FARM_REGION` | Código de la cabaña, criadores responsables (separados por coma), localidad, teléfono y región impresos en el certificado. Ver `.env.example`. |

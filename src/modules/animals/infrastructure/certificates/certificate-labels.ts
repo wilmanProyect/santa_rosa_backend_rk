@@ -51,6 +51,17 @@ export const GENETIC_CATEGORY_LABEL: Record<GeneticCategory, string> = {
   [GeneticCategory.PO]: 'Puro de origen (PO)',
 };
 
+/** Categoría abreviada, para las casillas del árbol genealógico. */
+export const GENETIC_CATEGORY_SHORT: Record<GeneticCategory, string> = {
+  [GeneticCategory.COMMERCIAL]: 'Comercial',
+  [GeneticCategory.BASE]: 'Base',
+  [GeneticCategory.G1]: 'G1',
+  [GeneticCategory.G2]: 'G2',
+  [GeneticCategory.G3]: 'G3',
+  [GeneticCategory.G4]: 'G4',
+  [GeneticCategory.PO]: 'PO',
+};
+
 /** Grado de pureza por categoría (cruzamiento absorbente); sin dato en Base y Comercial. */
 export const PURITY_LABEL: Partial<Record<GeneticCategory, string>> = {
   [GeneticCategory.G1]: '50 %',

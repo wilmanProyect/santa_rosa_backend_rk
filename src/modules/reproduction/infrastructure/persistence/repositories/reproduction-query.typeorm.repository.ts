@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { Sex } from '@modules/animals/domain/enums/animal.enums';
+import {
+  AnimalStatus,
+  GeneticCategory,
+  Sex,
+  Species,
+} from '@modules/animals/domain/enums/animal.enums';
+import { PedigreeAnimal } from '../../../domain/pedigree-tree';
 import { daysBetween } from '@modules/animals/domain/models/animal-event-date';
 import {
   IReproductionQueryRepository,
@@ -56,6 +62,59 @@ export class ReproductionQueryTypeormRepository implements IReproductionQueryRep
       earTag: r.ear_tag,
       name: r.name,
       sex: r.sex,
+      damId: r.dam_id,
+      sireId: r.sire_id,
+    }));
+  }
+
+  async loadPedigreeDetails(
+    id: string,
+    generations: number,
+  ): Promise<PedigreeAnimal[]> {
+    const rows: {
+      id: string;
+      ear_tag: string | null;
+      name: string | null;
+      sex: Sex;
+      species: Species;
+      birth_date: string | null;
+      is_external: boolean;
+      status: AnimalStatus;
+      genetic_category: GeneticCategory | null;
+      absid_registry: string | null;
+      breed_name: string | null;
+      dam_id: string | null;
+      sire_id: string | null;
+    }[] = await this.db.query(
+      `WITH RECURSIVE tree AS (
+         SELECT id, dam_id, sire_id, 0 AS depth FROM animals
+          WHERE id = $1 AND deleted_at IS NULL
+         UNION
+         SELECT a.id, a.dam_id, a.sire_id, t.depth + 1 FROM animals a
+           JOIN tree t ON a.id = t.dam_id OR a.id = t.sire_id
+          WHERE t.depth < $2 AND a.deleted_at IS NULL
+       )
+       SELECT DISTINCT a.id, a.ear_tag, a.name, a.sex, a.species,
+              to_char(a.birth_date, 'YYYY-MM-DD') AS birth_date,
+              a.is_external, a.status, a.genetic_category, a.absid_registry,
+              b.name AS breed_name, a.dam_id, a.sire_id
+         FROM tree
+         JOIN animals a ON a.id = tree.id
+         LEFT JOIN breeds b ON b.id = a.breed_id`,
+      [id, generations],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      earTag: r.ear_tag,
+      name: r.name,
+      sex: r.sex,
+      species: r.species,
+      birthDate: r.birth_date,
+      isExternal: r.is_external,
+      status: r.status,
+      geneticCategory: r.genetic_category,
+      absidRegistry: r.absid_registry,
+      breedName: r.breed_name,
       damId: r.dam_id,
       sireId: r.sire_id,
     }));

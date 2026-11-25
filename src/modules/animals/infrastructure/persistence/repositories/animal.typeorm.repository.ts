@@ -4,6 +4,7 @@ import { Brackets, EntityManager, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { Paginated, PaginationParams } from '@shared/domain/paginated';
 import { escapeLike } from '@shared/infrastructure/persistence/escape-like';
+import { returningRows } from '@shared/infrastructure/persistence/returning-rows';
 import {
   AnimalFilters,
   IAnimalRepository,
@@ -130,6 +131,23 @@ export class AnimalTypeormRepository implements IAnimalRepository {
         await syncDamDeath(manager, animal.getId(), damDeath.actorId);
       }
     });
+  }
+
+  async assignCertificateNumber(
+    id: string,
+    candidate: string,
+  ): Promise<string> {
+    // Atómico: si dos emisiones llegan a la vez, gana la primera y la otra
+    // recibe el mismo número.
+    const [row] = returningRows<{ certificate_number: string }>(
+      await this.repository.query(
+        `UPDATE animals SET certificate_number = COALESCE(certificate_number, $2)
+          WHERE id = $1 RETURNING certificate_number`,
+        [id, candidate],
+      ),
+    );
+    if (!row) throw new Error(`No existe el animal ${id}`);
+    return row.certificate_number;
   }
 
   async findBirthLink(id: string): Promise<BirthLink | null> {

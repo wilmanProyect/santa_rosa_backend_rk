@@ -1,3 +1,8 @@
+import {
+  buildPedigree,
+  PEDIGREE_GENERATIONS,
+  PedigreeResult,
+} from '../../domain/pedigree-tree';
 import { Inject, Injectable } from '@nestjs/common';
 import { toDateOnly } from '@shared/domain/date-only';
 import { Sex } from '@modules/animals/domain/enums/animal.enums';
@@ -63,6 +68,16 @@ export class ReproductionReportsService {
     private readonly queries: IReproductionQueryRepository,
     private readonly getAnimal: GetAnimalUseCase,
   ) {}
+
+  /** Árbol genealógico del animal hasta `generations` generaciones. */
+  async pedigree(
+    animalId: string,
+    generations: number = PEDIGREE_GENERATIONS.default,
+  ): Promise<PedigreeResult> {
+    await this.getAnimal.execute(animalId); // 404 si no existe
+    const nodes = await this.queries.loadPedigreeDetails(animalId, generations);
+    return buildPedigree(animalId, nodes, generations);
+  }
 
   async animalHistory(animalId: string): Promise<AnimalReproduction> {
     const animal = await this.getAnimal.execute(animalId);

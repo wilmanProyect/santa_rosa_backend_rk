@@ -26,6 +26,7 @@ import {
   CreatePregnancyCheckDto,
   ListBreedingServicesQueryDto,
   RecordAbortionDto,
+  PedigreeQueryDto,
   RecordDamDeathDto,
   UpdateBreedingServiceDto,
 } from '../../application/dtos/breeding.dto';
@@ -314,6 +315,19 @@ export class BreedingController {
   })
   async stats(@Query() query: ReproductionStatsQueryDto) {
     return this.reports.stats(query);
+  }
+
+  @Get('animals/:animalId/pedigree')
+  @RequirePermissions(PERMISSIONS.ANIMALS_READ)
+  @ApiOperation({
+    summary:
+      'Árbol genealógico del animal (por defecto 4 generaciones, hasta 6), con completitud, ancestros repetidos y consanguinidad',
+  })
+  async pedigree(
+    @Param('animalId', ParseUUIDPipe) animalId: string,
+    @Query() query: PedigreeQueryDto,
+  ) {
+    return this.reports.pedigree(animalId, query.generations);
   }
 
   @Get('animals/:animalId/reproduction')

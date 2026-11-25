@@ -7,6 +7,7 @@ import { ServiceStatus, ServiceType } from '../enums/reproduction.enums';
 import { BreedingService } from '../models/breeding-service.model';
 import { Birth } from '../models/birth.model';
 import { PedigreeNode } from '../kinship';
+import { PedigreeAnimal } from '../pedigree-tree';
 
 export interface ServiceFilters {
   status?: ServiceStatus;
@@ -159,6 +160,11 @@ export interface IReproductionQueryRepository {
    * (solo los no eliminados).
    */
   loadPedigree(ids: string[], generations: number): Promise<PedigreeNode[]>;
+  /** El animal y sus ancestros hasta `generations`, con los datos del árbol genealógico. */
+  loadPedigreeDetails(
+    id: string,
+    generations: number,
+  ): Promise<PedigreeAnimal[]>;
   stats(filters: StatsFilters): Promise<ReproductionStats>;
   /** Montas sin diagnóstico cuya fecha de diagnóstico llega hasta `until`. */
   pendingPregnancyChecks(until: string): Promise<PendingPregnancyCheck[]>;

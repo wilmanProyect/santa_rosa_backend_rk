@@ -97,7 +97,12 @@ export class GenerateAnimalCertificateUseCase {
     ]);
 
     const issuedAt = new Date();
-    const number = certificateNumber(issuedAt);
+    // El número es del animal: se asigna en la primera emisión y se repite en
+    // las siguientes (la fecha de emisión y los datos sí se actualizan).
+    const number = await this.animalRepository.assignCertificateNumber(
+      id,
+      certificateNumber(issuedAt),
+    );
     const content = await this.renderer.render({
       number,
       farm: this.farm(),
@@ -193,7 +198,7 @@ export class GenerateAnimalCertificateUseCase {
   }
 }
 
-/** p. ej. "SR-20261104-7F3A9C": fecha de emisión + sufijo aleatorio. */
+/** p. ej. "SR-20261104-7F3A9C": fecha de la primera emisión + sufijo aleatorio. */
 function certificateNumber(issuedAt: Date): string {
   const date = issuedAt.toISOString().slice(0, 10).replace(/-/g, '');
   return `SR-${date}-${randomBytes(3).toString('hex').toUpperCase()}`;

@@ -52,6 +52,10 @@ const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
 @Index('IDX_animals_breed', ['breed'])
 @Index('IDX_animals_color_id', ['color'])
 @Index('IDX_animals_inventory', ['isExternal', 'status', 'species'])
+@Index('UQ_animals_certificate_number', ['certificateNumber'], {
+  unique: true,
+  where: '"certificate_number" IS NOT NULL',
+})
 // Valores permitidos de las columnas tipo enum
 @Check('CHK_animals_species', sqlIn('species', Species))
 @Check('CHK_animals_sex', sqlIn('sex', Sex))
@@ -209,6 +213,20 @@ export class AnimalOrmEntity extends AuditableOrmEntity {
 
   @Column({ name: 'certificate_file_size', type: 'int', nullable: true })
   certificateFileSize: number | null;
+
+  /**
+   * Número del certificado del animal (PDF generado). Se asigna en la primera
+   * emisión y no cambia. No lo escribe el mapper: solo assignCertificateNumber.
+   */
+  @Column({
+    name: 'certificate_number',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+    update: false,
+    insert: false,
+  })
+  certificateNumber: string | null;
 
   @Column({
     name: 'certificate_file_uploaded_at',

@@ -102,6 +102,7 @@ export class UpdateAnimalUseCase {
         entryDate: dto.entryDate,
         sourceFarm: dto.sourceFarm,
         notes: dto.notes,
+        price: dto.price,
       },
       new Date(),
     );

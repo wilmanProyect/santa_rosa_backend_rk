@@ -2,6 +2,8 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@modules/roles-permissions/domain/permission-catalog';
 import { RequirePermissions } from '@modules/auth/infrastructure/decorators/require-permissions.decorator';
+import { CurrentUser } from '@modules/auth/infrastructure/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '@modules/auth/domain/authenticated-user';
 import { AuditService } from '../application/audit.service';
 import {
   ActivityQueryDto,
@@ -20,9 +22,12 @@ export class AuditController {
     summary:
       'Historial de actividad: altas, modificaciones y borrados de datos, y acciones (certificados, respaldos)',
   })
-  activity(@Query() query: ActivityQueryDto) {
+  activity(
+    @CurrentUser() viewer: AuthenticatedUser,
+    @Query() query: ActivityQueryDto,
+  ) {
     const { page, limit, ...filters } = query;
-    return this.audit.list(filters, { page, limit });
+    return this.audit.list(filters, { page, limit }, viewer.permissions);
   }
 
   @Get('audit/entities')
@@ -39,10 +44,16 @@ export class AuditController {
       'Historial de cambios de un animal: su ficha, pesajes, sanidad, fotos, montas y partos',
   })
   animalActivity(
+    @CurrentUser() viewer: AuthenticatedUser,
     @Param('animalId', ParseUUIDPipe) animalId: string,
     @Query() query: AnimalActivityQueryDto,
   ) {
     const { page, limit, ...filters } = query;
-    return this.audit.animalActivity(animalId, filters, { page, limit });
+    return this.audit.animalActivity(
+      animalId,
+      filters,
+      { page, limit },
+      viewer.permissions,
+    );
   }
 }

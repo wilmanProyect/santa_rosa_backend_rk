@@ -14,6 +14,7 @@ import { ReproductionModule } from './modules/reproduction/reproduction.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { ExportsModule } from './modules/exports/exports.module';
 import { buildDataSourceOptions } from './database/database.config';
 
 @Module({
@@ -29,6 +30,7 @@ import { buildDataSourceOptions } from './database/database.config';
     ReviewsModule,
     NotificationsModule,
     AuditModule,
+    ExportsModule,
     // Carga de variables de entorno globalmente
     ConfigModule.forRoot({
       isGlobal: true,

@@ -5,6 +5,7 @@ import type {
 } from '@shared/application/ports/audit-events.interface';
 import { currentAuditContext } from '@shared/infrastructure/audit/audit-context';
 import { PaginationParams } from '@shared/domain/paginated';
+import { PERMISSIONS } from '@modules/roles-permissions/domain/permission-catalog';
 import {
   AUDIT_ENTITY_LABELS,
   AUDIT_EVENT_LABELS,
@@ -37,6 +38,36 @@ export function collectIds(entries: AuditEntry[]): string[] {
   return [...ids];
 }
 
+/**
+ * Datos reservados: en el historial se ve que cambiaron, pero el valor solo lo
+ * ve quien tenga alguno de los permisos indicados.
+ */
+const RESTRICTED_FIELDS: Record<string, Record<string, string[]>> = {
+  animals: {
+    price: [PERMISSIONS.ANIMALS_READ_PRICE, PERMISSIONS.ANIMALS_SET_PRICE],
+  },
+};
+
+const HIDDEN = '[oculto]';
+
+/** Oculta los valores de los datos reservados que el usuario no puede ver. */
+export function redactRestricted(
+  entry: AuditEntry,
+  permissions: readonly string[],
+): AuditEntry {
+  const fields = RESTRICTED_FIELDS[entry.entity];
+  if (!fields || !entry.changes) return entry;
+  let changes: Record<string, unknown> | null = null;
+  for (const [field, allowed] of Object.entries(fields)) {
+    if (!(field in entry.changes)) continue;
+    if (allowed.some((p) => permissions.includes(p))) continue;
+    changes ??= { ...entry.changes };
+    const value = changes[field];
+    changes[field] = Array.isArray(value) ? [HIDDEN, HIDDEN] : HIDDEN;
+  }
+  return changes ? { ...entry, changes } : entry;
+}
+
 export interface AuditPage {
   items: (AuditEntry & { entityLabel: string; eventLabel: string | null })[];
   total: number;
@@ -65,15 +96,18 @@ export class AuditService implements IAuditEvents {
     }
   }
 
+  /** viewerPermissions: permisos de quien consulta, para ocultar datos reservados. */
   async list(
     filters: AuditFilters,
     pagination: PaginationParams,
+    viewerPermissions: readonly string[],
   ): Promise<AuditPage> {
     const page = await this.repository.find(filters, pagination, this.timeZone);
-    const refs = await this.repository.resolveRefs(collectIds(page.items));
+    const items = page.items.map((e) => redactRestricted(e, viewerPermissions));
+    const refs = await this.repository.resolveRefs(collectIds(items));
     return {
       ...page,
-      items: page.items.map((e) => ({
+      items: items.map((e) => ({
         ...e,
         entityLabel: AUDIT_ENTITY_LABELS[e.entity] ?? e.entity,
         eventLabel: e.event ? AUDIT_EVENT_LABELS[e.event] : null,
@@ -86,11 +120,12 @@ export class AuditService implements IAuditEvents {
     animalId: string,
     filters: Pick<AuditFilters, 'action' | 'from' | 'to'>,
     pagination: PaginationParams,
+    viewerPermissions: readonly string[],
   ): Promise<AuditPage> {
     if (!(await this.repository.animalExists(animalId))) {
       throw new NotFoundException('El animal no existe');
     }
-    return this.list({ ...filters, animalId }, pagination);
+    return this.list({ ...filters, animalId }, pagination, viewerPermissions);
   }
 
   entities() {

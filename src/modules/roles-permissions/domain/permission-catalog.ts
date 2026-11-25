@@ -37,6 +37,8 @@ export const PERMISSIONS = {
   ANIMAL_PHOTOS_DELETE: 'animal-photos:delete',
   ANIMALS_ISSUE_CERTIFICATE: 'animals:issue-certificate',
   ANIMALS_CONFIRM_GENETIC_CATEGORY: 'animals:confirm-genetic-category',
+  ANIMALS_READ_PRICE: 'animals:read-price',
+  ANIMALS_SET_PRICE: 'animals:set-price',
 
   WEIGHINGS_WRITE: 'weighings:write',
 
@@ -54,6 +56,8 @@ export const PERMISSIONS = {
   REVIEWS_RESOLVE: 'reviews:resolve',
 
   AUDIT_READ: 'audit:read',
+
+  EXPORTS_DOWNLOAD: 'exports:download',
 
   BACKUPS_CREATE: 'backups:create',
   BACKUPS_RESTORE: 'backups:restore',
@@ -205,6 +209,18 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     description:
       'Confirmar la categoría genética de un animal según ABSID (la esperada al nacer u otra)',
   },
+  {
+    code: PERMISSIONS.ANIMALS_READ_PRICE,
+    module: 'Animales',
+    description:
+      'Ver el precio (valorización) de los animales, también en el historial de actividad',
+  },
+  {
+    code: PERMISSIONS.ANIMALS_SET_PRICE,
+    module: 'Animales',
+    description:
+      'Asignar, corregir o quitar el precio de los animales (requiere también animals:create o animals:update)',
+  },
 
   {
     code: PERMISSIONS.WEIGHINGS_WRITE,
@@ -279,6 +295,13 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
     module: 'Auditoría',
     description:
       'Ver el historial de inicios de sesión y de actividad (datos ingresados, modificados y borrados)',
+  },
+
+  {
+    code: PERMISSIONS.EXPORTS_DOWNLOAD,
+    module: 'Exportación',
+    description:
+      'Exportar a Excel los animales, el registro sanitario, las montas y los partos (cada sección exige además su permiso de lectura)',
   },
 
   {

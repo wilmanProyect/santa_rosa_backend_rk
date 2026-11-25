@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { AuditableOrmEntity } from '@shared/infrastructure/persistence/audit-columns';
 import { sqlIn } from '@shared/infrastructure/persistence/sql-in';
+import { numericTransformer } from '@shared/infrastructure/persistence/numeric.transformer';
 import {
   AnimalStatus,
   EntryOrigin,
@@ -100,6 +101,11 @@ const BORN_ON_FARM = `'${EntryOrigin.BORN_ON_FARM}'`;
 @Check(
   'CHK_animals_identifier_exception',
   `("identifier_exception" AND "identifier_exception_reason" IS NOT NULL) OR (NOT "identifier_exception" AND "identifier_exception_reason" IS NULL)`,
+)
+// Precio: no negativo, y solo en animales de la cabaña.
+@Check(
+  'CHK_animals_price',
+  `"price" IS NULL OR ("price" >= 0 AND NOT "is_external")`,
 )
 export class AnimalOrmEntity extends AuditableOrmEntity {
   @PrimaryColumn('uuid')
@@ -280,4 +286,14 @@ export class AnimalOrmEntity extends AuditableOrmEntity {
 
   @Column({ type: 'varchar', length: 1000, nullable: true })
   notes: string | null;
+
+  /** Valorización en bolivianos (Bs). Reservado a los permisos de precio. */
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  price: number | null;
 }

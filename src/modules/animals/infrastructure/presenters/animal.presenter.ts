@@ -10,6 +10,8 @@ export interface AnimalDetailExtras {
   primaryPhoto?: PrimaryPhotoSummary | null;
   weights?: WeightSummary;
   withdrawal?: AnimalWithdrawal;
+  /** El usuario puede ver el precio (si no, el campo no se incluye). */
+  showPrice?: boolean;
 }
 
 export class AnimalPresenter {
@@ -17,6 +19,7 @@ export class AnimalPresenter {
   static toSummary(
     animal: Animal,
     primaryPhoto: PrimaryPhotoSummary | null = null,
+    showPrice = false,
   ) {
     return {
       id: animal.getId(),
@@ -36,6 +39,8 @@ export class AnimalPresenter {
       dam: this.parent(animal.getDam()),
       sire: this.parent(animal.getSire()),
       primaryPhoto,
+      // Dato reservado: sin el permiso, el campo no aparece en la respuesta.
+      ...(showPrice ? { price: animal.getPrice() } : {}),
     };
   }
 
@@ -45,7 +50,7 @@ export class AnimalPresenter {
     const primaryPhoto = extras.primaryPhoto ?? null;
     const file = animal.getCertificateFile();
     return {
-      ...this.toSummary(animal, primaryPhoto),
+      ...this.toSummary(animal, primaryPhoto, extras.showPrice === true),
       absidCertificateCode: animal.getAbsidCertificateCode(),
       certificateFile: file
         ? {

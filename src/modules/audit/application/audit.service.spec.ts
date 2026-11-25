@@ -1,4 +1,4 @@
-import { collectIds } from './audit.service';
+import { collectIds, redactRestricted } from './audit.service';
 import { AuditAction, AuditEntry, AuditSource } from '../domain/audit.types';
 
 const entry = (over: Partial<AuditEntry>): AuditEntry => ({
@@ -39,5 +39,35 @@ describe('collectIds', () => {
 
   it('sin cambios ni ids devuelve una lista vacía', () => {
     expect(collectIds([entry({})])).toEqual([]);
+  });
+});
+
+describe('redactRestricted', () => {
+  const change = entry({
+    changes: { price: [1000, 1200], notes: ['a', 'b'] },
+  });
+
+  it('oculta el precio a quien no tiene el permiso', () => {
+    expect(redactRestricted(change, ['audit:read']).changes).toEqual({
+      price: ['[oculto]', '[oculto]'],
+      notes: ['a', 'b'],
+    });
+    const created = entry({
+      action: AuditAction.CREATE,
+      changes: { price: 9 },
+    });
+    expect(redactRestricted(created, []).changes).toEqual({
+      price: '[oculto]',
+    });
+  });
+
+  it('lo muestra con animals:read-price o animals:set-price', () => {
+    expect(redactRestricted(change, ['animals:read-price'])).toBe(change);
+    expect(redactRestricted(change, ['animals:set-price'])).toBe(change);
+  });
+
+  it('no toca otras tablas', () => {
+    const other = entry({ entity: 'areas', changes: { price: [1, 2] } });
+    expect(redactRestricted(other, [])).toBe(other);
   });
 });

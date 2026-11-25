@@ -3,11 +3,15 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
+import { MAX_ANIMAL_PRICE } from '../../domain/models/animal.model';
 import {
   EntryOrigin,
   GeneticCategory,
@@ -157,4 +161,15 @@ export class CreateAnimalDto {
   @MaxLength(1000)
   @IsOptional()
   notes?: string;
+
+  @ApiPropertyOptional({
+    example: 2500,
+    description:
+      'Precio (valorización) en Bs, hasta 2 decimales. Requiere el permiso animals:set-price. No aplica a animales externos.',
+  })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(MAX_ANIMAL_PRICE)
+  @IsOptional()
+  price?: number;
 }

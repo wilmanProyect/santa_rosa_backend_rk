@@ -312,6 +312,7 @@ export const can = (granted: string[], ...required: Permission[]) =>
 | Menú **Roles** | `roles:read` · crear `roles:create` · editar `roles:update` · eliminar `roles:delete` |
 | Menú **Áreas** | `areas:read` · crear `areas:create` · editar `areas:update` · eliminar `areas:delete` |
 | Menú **Auditoría** (accesos y actividad) y pestaña "Historial de cambios" de la ficha del animal | `audit:read` |
+| Botón **Exportar a Excel** | `exports:download` (cada sección, además, su permiso de lectura) |
 | Botón **Descargar copia de seguridad** | `backups:create` |
 | Sección **Restaurar una copia de seguridad** | `backups:create` (para ver la pantalla) + `backups:restore` |
 | Campana, lista de notificaciones y notificaciones push | Solo sesión |
@@ -327,6 +328,8 @@ export const can = (granted: string[], ...required: Permission[]) =>
 | Subir fotos, editarlas, elegir la principal | `animal-photos:upload` |
 | Eliminar fotos | `animal-photos:delete` |
 | Botón "Emitir certificado" (PDF del animal) | `animals:issue-certificate` |
+| Ver el precio del animal (listado y ficha) | `animals:read-price` o `animals:set-price` |
+| Campo "Precio" en el formulario del animal | `animals:set-price` (más `animals:create` o `animals:update`) |
 | Ver pesajes (pestaña de la ficha) | `animals:read` |
 | Registrar, corregir o eliminar pesajes; jornada de pesaje | `weighings:write` |
 | Ver el registro sanitario y el catálogo de productos | `health:read` |
@@ -521,6 +524,8 @@ export interface AnimalSummary {
   dam: ParentRef | null;
   sire: ParentRef | null;
   primaryPhoto: PrimaryPhoto | null;
+  /** Precio en Bs. Solo viene con animals:read-price o animals:set-price; null = sin precio. */
+  price?: number | null;
 }
 
 export interface AnimalDetail extends AnimalSummary, Audit {
@@ -1208,7 +1213,7 @@ Pantalla **Auditoría** (`audit:read`) con dos pestañas: **Accesos** y **Activi
 
 ```ts
 type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE' | 'EVENT';
-type AuditEventType = 'CERTIFICATE_ISSUED' | 'BACKUP_DOWNLOADED' | 'BACKUP_RESTORED' | 'ANIMALS_IMPORTED';
+type AuditEventType = 'CERTIFICATE_ISSUED' | 'BACKUP_DOWNLOADED' | 'BACKUP_RESTORED' | 'ANIMALS_IMPORTED' | 'DATA_EXPORTED';
 
 interface AuditEntry {
   id: string;
@@ -1261,7 +1266,7 @@ const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
 - **Valores:**
   - Si el valor es un id que está en `refs`, muestre `refs[id].label` ("Dorper", "148 COQUETA").
   - `null` → "—"; `true`/`false` → "Sí"/"No"; fechas `YYYY-MM-DD` como fecha local; los valores de enums con las etiquetas de la [sección 5](#5-etiquetas-de-los-valores-fijos).
-  - `"[oculto]"` se muestra tal cual (es la contraseña: solo se sabe que cambió).
+  - `"[oculto]"` se muestra tal cual: es la contraseña, o el precio del animal para quien no tiene permiso de verlo. Solo se sabe que cambió.
 - **Nombres de campo:** vienen como en la base (`snake_case`: `weight_kg`, `breed_id`). Arme un mapa de etiquetas con los campos de los formularios y, para los que falten, muestre el nombre con `_` reemplazado por espacios.
 - También sirve en la ficha del usuario, como pestaña "Actividad" con `?userId=<id>`.
 
@@ -1407,6 +1412,16 @@ Solo para animales de la cabaña. En los externos no se envía nada de esta secc
 En externos, `sourceFarm` sirve para la cabaña o el centro de semen de origen.
 
 **Otros:** `notes` (observaciones, máx. 1000).
+
+#### Precio (dato reservado)
+
+| Campo | Regla |
+| --- | --- |
+| `price` | Bs, `>= 0`, hasta 2 decimales. `null` lo quita. Solo animales de la cabaña (no externos). |
+
+- **Muestre el campo solo si el usuario tiene `animals:set-price`.** Si no lo tiene, **no envíe `price`** (ni siquiera `null`): la API responde `403` y no guarda el resto del cambio.
+- En la ficha y el listado, muestre el precio solo si `'price' in animal` (la API lo omite a quien no tiene permiso). Formato: `Bs 2.500,00`. `null` → "Sin precio".
+- Columna "Precio" opcional en el listado, visible solo con `animals:read-price` o `animals:set-price`.
 
 #### Edición (PATCH)
 
@@ -1613,6 +1628,16 @@ export const GENERATION_LABEL = ['Animal', 'Padres', 'Abuelos', 'Bisabuelos', 'T
 ### 12.8 Eliminar
 
 `DELETE /animals/:id` (`animals:delete`) → `204`. **Solo para registros cargados por error**: en el diálogo de confirmación explique que para una muerte o venta se usa "Registrar salida". `409` si tiene crías registradas o figura como madre o padre en montas o partos.
+
+### 12.9 Exportar a Excel
+
+`GET /exports/excel?sections=&species=&from=&to=&status=&includeExternal=` (`exports:download`) → archivo `.xlsx`. Contrato completo en [API.md](API.md#exportación-a-excel).
+
+- Botón **"Exportar a Excel"** en el listado de animales (y, si quiere, en Sanidad y Reproducción), visible solo con `exports:download`.
+- Diálogo con casillas por sección: **Animales** (`animals:read`), **Registro sanitario** (`health:read`), **Montas y diagnósticos** y **Partos y crías** (`reproduction:read`). Muestre solo las que el usuario puede ver y márquelas todas por defecto. Envíe las marcadas en `sections` separadas por coma (`animals,health`).
+- Filtros opcionales: especie, rango de fechas (sanidad, montas y partos) y, para los animales, estado ("Solo inventario actual" = `status=ALIVE`) e "Incluir reproductores externos".
+- La descarga necesita el token, así que no sirve un `<a href>`: pida el archivo con `fetch`, conviértalo en `Blob` y descárguelo con `URL.createObjectURL`. El nombre viene en `Content-Disposition`.
+- La columna de precio solo sale si el usuario tiene permiso de verlo: no hace falta hacer nada en el frontend.
 
 ---
 

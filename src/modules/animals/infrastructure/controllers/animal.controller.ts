@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Header,
   Inject,
@@ -98,8 +99,9 @@ export class AnimalController {
     @CurrentUser() actor: AuthenticatedUser,
     @Body() dto: CreateAnimalDto,
   ) {
+    assertCanSetPrice(actor, dto.price);
     const animal = await this.createAnimalUseCase.execute(actor.id, dto);
-    return this.present(animal);
+    return this.present(animal, actor);
   }
 
   @Get()
@@ -107,7 +109,10 @@ export class AnimalController {
   @ApiOperation({
     summary: 'Listar animales (paginado, con búsqueda y filtros)',
   })
-  async findAll(@Query() query: ListAnimalsQueryDto) {
+  async findAll(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: ListAnimalsQueryDto,
+  ) {
     const result = await this.listAnimalsUseCase.execute(
       {
         search: query.search,
@@ -126,12 +131,14 @@ export class AnimalController {
     const primaryPhotos = await this.photoUrls.primaryPhotos(
       result.items.map((animal) => animal.getId()),
     );
+    const showPrice = canSeePrice(actor);
     return {
       ...result,
       items: result.items.map((animal) =>
         AnimalPresenter.toSummary(
           animal,
           primaryPhotos.get(animal.getId()) ?? null,
+          showPrice,
         ),
       ),
     };
@@ -140,9 +147,12 @@ export class AnimalController {
   @Get(':id')
   @RequirePermissions(PERMISSIONS.ANIMALS_READ)
   @ApiOperation({ summary: 'Obtener un animal' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     const animal = await this.getAnimalUseCase.execute(id);
-    return this.present(animal);
+    return this.present(animal, actor);
   }
 
   @Patch(':id')
@@ -153,8 +163,9 @@ export class AnimalController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAnimalDto,
   ) {
+    assertCanSetPrice(actor, dto.price);
     const animal = await this.updateAnimalUseCase.execute(actor.id, id, dto);
-    return this.present(animal);
+    return this.present(animal, actor);
   }
 
   @Patch(':id/status')
@@ -173,7 +184,7 @@ export class AnimalController {
       id,
       dto,
     );
-    return { ...(await this.present(animal)), warnings };
+    return { ...(await this.present(animal, actor)), warnings };
   }
 
   @Delete(':id')
@@ -224,7 +235,7 @@ export class AnimalController {
       content: file.buffer,
       originalName: file.originalname,
     });
-    return this.present(animal);
+    return this.present(animal, actor);
   }
 
   @Get(':id/certificate-file')
@@ -291,7 +302,7 @@ export class AnimalController {
   }
 
   /** Ficha completa, con la miniatura de su foto principal. */
-  private async present(animal: Animal) {
+  private async present(animal: Animal, actor: AuthenticatedUser) {
     const [primaryPhotos, weights, withdrawal] = await Promise.all([
       this.photoUrls.primaryPhotos([animal.getId()]),
       this.weighingRepository.findSummary(animal.getId()),
@@ -301,6 +312,29 @@ export class AnimalController {
       primaryPhoto: primaryPhotos.get(animal.getId()) ?? null,
       weights,
       withdrawal,
+      showPrice: canSeePrice(actor),
     });
+  }
+}
+
+/** Quien carga el precio también lo ve, aunque no tenga animals:read-price. */
+function canSeePrice(actor: AuthenticatedUser): boolean {
+  return (
+    actor.permissions.includes(PERMISSIONS.ANIMALS_READ_PRICE) ||
+    actor.permissions.includes(PERMISSIONS.ANIMALS_SET_PRICE)
+  );
+}
+
+function assertCanSetPrice(
+  actor: AuthenticatedUser,
+  price: number | null | undefined,
+): void {
+  if (
+    price !== undefined &&
+    !actor.permissions.includes(PERMISSIONS.ANIMALS_SET_PRICE)
+  ) {
+    throw new ForbiddenException(
+      'No tiene permiso para asignar el precio del animal',
+    );
   }
 }

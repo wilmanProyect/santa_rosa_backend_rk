@@ -47,6 +47,7 @@ export const AUDIT_EVENT_LABELS: Record<AuditEventType, string> = {
   [AuditEventType.BACKUP_DOWNLOADED]: 'Descargó una copia de seguridad',
   [AuditEventType.BACKUP_RESTORED]: 'Restauró una copia de seguridad',
   [AuditEventType.ANIMALS_IMPORTED]: 'Importó animales desde planillas',
+  [AuditEventType.DATA_EXPORTED]: 'Exportó datos a Excel',
 };
 
 export interface AuditFilters {

@@ -53,6 +53,7 @@ export class CreateAnimalUseCase {
       entryDate: dto.entryDate ?? null,
       sourceFarm: dto.sourceFarm ?? null,
       notes: dto.notes ?? null,
+      price: dto.price ?? null,
       createdBy: actorId,
       now: new Date(),
     });

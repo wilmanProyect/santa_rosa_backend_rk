@@ -37,6 +37,7 @@ export class AnimalMapper {
       statusDate: ormEntity.statusDate,
       statusReason: ormEntity.statusReason,
       notes: ormEntity.notes,
+      price: ormEntity.price,
       audit: {
         createdAt: ormEntity.createdAt,
         createdBy: ormEntity.createdBy,
@@ -82,6 +83,7 @@ export class AnimalMapper {
     ormEntity.statusDate = domainModel.getStatusDate();
     ormEntity.statusReason = domainModel.getStatusReason();
     ormEntity.notes = domainModel.getNotes();
+    ormEntity.price = domainModel.getPrice();
     ormEntity.createdBy = audit.createdBy;
     ormEntity.updatedBy = audit.updatedBy;
     return ormEntity;

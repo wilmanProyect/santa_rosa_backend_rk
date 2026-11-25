@@ -131,6 +131,29 @@ describe('Animal', () => {
     });
   });
 
+  describe('precio', () => {
+    it('se asigna, se corrige y se quita', () => {
+      const animal = buildAnimal({ price: 2500 });
+      expect(animal.getPrice()).toBe(2500);
+      animal.update({ price: 3100.5 }, NOW);
+      expect(animal.getPrice()).toBe(3100.5);
+      animal.update({ notes: 'sin tocar el precio' }, NOW);
+      expect(animal.getPrice()).toBe(3100.5);
+      animal.update({ price: null }, NOW);
+      expect(animal.getPrice()).toBeNull();
+    });
+
+    it('no puede ser negativo', () => {
+      expect(() => buildAnimal({ price: -1 })).toThrow('negativo');
+    });
+
+    it('los animales externos no tienen precio', () => {
+      expect(() =>
+        buildAnimal({ isExternal: true, sex: Sex.MALE, price: 100 }),
+      ).toThrow('no tiene precio');
+    });
+  });
+
   describe('animales externos', () => {
     it('no necesitan arete ni categoría y no forman parte del inventario', () => {
       const donor = buildAnimal({

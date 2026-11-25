@@ -49,6 +49,12 @@ export interface AnimalData {
   sourceFarm: string | null;
 
   notes: string | null;
+
+  /**
+   * Valorización del animal en bolivianos (Bs). Dato reservado: solo lo ven y
+   * lo cargan los usuarios con los permisos de precio. Los externos no tienen.
+   */
+  price: number | null;
 }
 
 export interface AnimalProps extends AnimalData {
@@ -77,6 +83,9 @@ export interface AnimalProps extends AnimalData {
 }
 
 export type AnimalChanges = Partial<AnimalData>;
+
+/** Límite de la columna numeric(12,2). */
+export const MAX_ANIMAL_PRICE = 9_999_999_999.99;
 
 const PARENT_LABELS = {
   dam: {
@@ -131,6 +140,7 @@ export class Animal {
       entryDate: null,
       sourceFarm: null,
       notes: null,
+      price: null,
       status: AnimalStatus.ALIVE,
       statusDate: null,
       statusReason: null,
@@ -250,6 +260,10 @@ export class Animal {
     return this.props.notes;
   }
 
+  public getPrice(): number | null {
+    return this.props.price;
+  }
+
   public getAudit(): AuditInfo {
     return this.props.audit;
   }
@@ -318,6 +332,7 @@ export class Animal {
       p.sourceFarm = optionalText(changes.sourceFarm);
     }
     if (changes.notes !== undefined) p.notes = optionalText(changes.notes);
+    if (changes.price !== undefined) p.price = changes.price;
 
     this.assertInvariants(now);
   }
@@ -448,6 +463,11 @@ export class Animal {
           'Un animal externo no tiene origen ni fecha de ingreso a la cabaña',
         );
       }
+      if (p.price !== null) {
+        throw new DomainError(
+          'Un animal externo no forma parte de la cabaña: no tiene precio',
+        );
+      }
     } else {
       if (!p.earTag && !p.identifierException) {
         throw new DomainError(
@@ -471,6 +491,10 @@ export class Animal {
       }
       // Compras, donaciones, regalos e inventario inicial: la fecha de ingreso
       // y la de nacimiento son opcionales, porque el histórico no siempre las tiene.
+    }
+
+    if (p.price !== null && (!Number.isFinite(p.price) || p.price < 0)) {
+      throw new DomainError('El precio no puede ser negativo');
     }
 
     assertNotFuture(p.birthDate, 'La fecha de nacimiento', today);

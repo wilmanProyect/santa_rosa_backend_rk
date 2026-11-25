@@ -10,15 +10,79 @@ Para publicarlo en un servidor, ver [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Configuración
 
+La configuración va en un archivo `.env` en la raíz del proyecto. **Ningún archivo `.env` se sube al repositorio**, ni siquiera de ejemplo: `.gitignore` excluye `.env`, `.env.*` y `*.env`. Cada equipo crea el suyo con esta plantilla y completa los valores:
+
 ```bash
-cp .env.example .env
+PORT=3000
+NODE_ENV=development
+
+# PostgreSQL (para `pnpm start:dev`; en Docker el compose usa postgres:5432)
+DB_HOST=localhost
+DB_PORT=5439
+DB_USER=postgres
+DB_PASSWORD=
+DB_NAME=santa_rosa_db
+DB_MIGRATIONS_RUN=true
+
+# Puertos publicados en el host por docker compose
+DB_EXTERNAL_PORT=5439
+API_EXTERNAL_PORT=3000
+GARAGE_S3_EXTERNAL_PORT=3900
+
+# Autenticación
+JWT_SECRET=
+JWT_ACCESS_TTL_MINUTES=15
+JWT_REFRESH_TTL_DAYS=7
+AUTH_MAX_FAILED_ATTEMPTS=5
+AUTH_LOCK_MINUTES=15
+ADMIN_DEFAULT_USERNAME=admin
+ADMIN_DEFAULT_PASSWORD=
+
+# Garage (fotos y certificados, compatible con S3)
+S3_ENDPOINT=http://localhost:3900
+S3_PUBLIC_ENDPOINT=http://localhost:3900
+S3_REGION=garage
+S3_BUCKET=santa-rosa
+S3_PRESIGNED_URL_TTL_SECONDS=900
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+GARAGE_RPC_SECRET=
+GARAGE_ADMIN_TOKEN=
+
+# Frontend autorizado (CORS), separado por coma
+CORS_ORIGINS=http://localhost:5173
+
+# Datos impresos en el certificado del animal
+FARM_NAME=Cabaña Santa Rosa
+FARM_CODE=
+FARM_BREEDERS=
+FARM_LOCALITY=
+FARM_PHONE=
+FARM_REGION=
+FARM_TIME_ZONE=America/La_Paz
+
+# Notificaciones push (opcional)
+VAPID_SUBJECT=
+
+# true si la API está detrás de un proxy inverso (nginx, Traefik)
+TRUST_PROXY=false
 ```
 
-Defina al menos `JWT_SECRET` (mínimo 32 caracteres) y `CORS_ORIGINS` con la URL del frontend. Genere el secreto con:
+Los valores vacíos de secretos se generan, nunca se copian de otro equipo ni del servidor:
 
 ```bash
+# JWT_SECRET (mínimo 32 caracteres)
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+
+# Secretos de Garage, con el formato que exige:
+#   S3_ACCESS_KEY = "GK" + 24 hex; los otros tres = 64 hex
+node -e "const h=n=>require('crypto').randomBytes(n).toString('hex');console.log('S3_ACCESS_KEY=GK'+h(12)+'\nS3_SECRET_KEY='+h(32)+'\nGARAGE_RPC_SECRET='+h(32)+'\nGARAGE_ADMIN_TOKEN='+h(32))"
+
+# o, en Linux sin Node:
+echo "S3_ACCESS_KEY=GK$(openssl rand -hex 12)"; for v in S3_SECRET_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN; do echo "$v=$(openssl rand -hex 32)"; done
 ```
+
+`GARAGE_RPC_SECRET` no debe cambiar una vez creados los volúmenes. Si cambia la clave S3, Garage registra la nueva al reiniciar, pero la anterior **sigue con acceso** al bucket; revóquela con `docker compose exec garage /garage key delete --yes <clave anterior>`.
 
 ## Correr con Docker (API + base de datos + Garage)
 
@@ -34,7 +98,7 @@ docker compose up -d --build
 
 Al arrancar, la API aplica las migraciones pendientes y crea los permisos, el rol **Administrador** y el usuario `admin` / `Admin123` (que debe cambiar la contraseña en el primer ingreso). Los datos de la base persisten en el volumen `santa_rosa_backend_postgres_data` y los archivos (fotos de animales y certificados ABSID) en **Garage** (almacenamiento compatible con S3), volúmenes `santa_rosa_backend_garage_meta` y `santa_rosa_backend_garage_data`. Garage corre como un solo nodo: en su primer arranque crea el bucket `S3_BUCKET` y la clave `S3_ACCESS_KEY`. La API no arranca si no puede conectarse a Garage.
 
-Antes del primer arranque, genere los secretos de Garage (`S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`) con el comando que figura en [.env.example](.env.example): Garage exige un formato específico.
+Antes del primer arranque, genere los secretos de Garage (`S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`) con los comandos de [Configuración](#configuración): Garage exige un formato específico.
 
 Garage no tiene consola web. Para revisar el almacenamiento se usa su CLI:
 
@@ -137,7 +201,7 @@ Las herramientas `pg_dump`, `pg_restore` y `psql` vienen en la imagen de la API,
 
 ## Variables de entorno
 
-Ver [.env.example](.env.example). Las principales:
+La plantilla completa está en [Configuración](#configuración). Las principales:
 
 | Variable | Descripción |
 | --- | --- |
@@ -149,7 +213,7 @@ Ver [.env.example](.env.example). Las principales:
 | `ADMIN_DEFAULT_USERNAME` / `ADMIN_DEFAULT_PASSWORD` | Admin inicial, creado solo si no hay administradores activos. |
 | `S3_ENDPOINT` | URL con la que la API llega a Garage. En Docker la fija el compose (`http://garage:3900`). |
 | `S3_PUBLIC_ENDPOINT` | URL con la que el **navegador** llega a Garage. Se usa para firmar las URL temporales de las fotos, así que debe ser accesible desde el frontend. |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | Clave y bucket de Garage. **Obligatorias**; ver formato en `.env.example`. |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | Clave y bucket de Garage. **Obligatorias**; ver formato en [Configuración](#configuración). |
 | `S3_REGION` | `garage`. Debe coincidir con `s3_region` de `docker/garage/garage.toml`. |
 | `GARAGE_RPC_SECRET` / `GARAGE_ADMIN_TOKEN` | Secretos internos de Garage. **Obligatorios**. |
 | `S3_PRESIGNED_URL_TTL_SECONDS` | Validez de las URL temporales de las fotos (por defecto 900 s). |
@@ -158,6 +222,6 @@ Ver [.env.example](.env.example). Las principales:
 | `NOTIFICATIONS_SCHEDULER` | `false` desactiva la revisión diaria de avisos (por ejemplo, en una segunda instancia de la API). |
 | `TRUST_PROXY` | `true` si la API está detrás de un proxy inverso. |
 | `FARM_NAME` / `FARM_TIME_ZONE` | Nombre de la cabaña y zona horaria impresos en el certificado del animal (por defecto "Cabaña Santa Rosa" / `America/La_Paz`). |
-| `FARM_CODE` / `FARM_BREEDERS` / `FARM_LOCALITY` / `FARM_PHONE` / `FARM_REGION` | Código de la cabaña, criadores responsables (separados por coma), localidad, teléfono y región impresos en el certificado. Ver `.env.example`. |
+| `FARM_CODE` / `FARM_BREEDERS` / `FARM_LOCALITY` / `FARM_PHONE` / `FARM_REGION` | Código de la cabaña, criadores responsables (separados por coma), localidad, teléfono y región impresos en el certificado. |
 | `BACKUP_UPLOAD_MAX_MB` | Tamaño máximo de un respaldo subido para restaurarlo desde el sistema (por defecto 2048). |
 | `API_EXTERNAL_PORT` / `DB_EXTERNAL_PORT` / `GARAGE_S3_EXTERNAL_PORT` | Puertos publicados en el host por docker compose. |

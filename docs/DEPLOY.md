@@ -81,7 +81,7 @@ git clone https://github.com/wilmanProyect/santa_rosa_front_rk.git santa_rosa_fr
 
 ## 3. Generar los secretos
 
-En el VPS, genere valores **nuevos**. No reutilice los del equipo de desarrollo ni los de `.env.example`.
+En el VPS, genere valores **nuevos**. No reutilice los del equipo de desarrollo.
 
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 48)"
@@ -97,12 +97,11 @@ Guarde la salida en un gestor de contraseñas. `GARAGE_RPC_SECRET` y `DB_PASSWOR
 
 ```bash
 cd /opt/santa-rosa/santa_rosa_backend
-cp .env.example .env
-chmod 600 .env
 nano .env
+chmod 600 .env
 ```
 
-Cambie estos valores (deje el resto como viene):
+El repositorio no trae ningún `.env`. Pegue la plantilla de la sección [Configuración del README](../README.md#configuración) y cambie estos valores (el resto puede quedar como en la plantilla):
 
 ```dotenv
 NODE_ENV=production

@@ -6,7 +6,7 @@ coverage
 # Secretos y configuración local: las variables llegan por docker-compose
 .env
 .env.*
-!.env.example
+*.env
 
 # Copias de seguridad (datos reales)
 backups
